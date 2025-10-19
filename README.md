@@ -26,6 +26,10 @@
 #### 负重设置参数
 - 无限负重开关 (无视重量限制，可携带任意重量的物品)
 
+#### 视野设置参数
+- 自定义视野开关 (启用/禁用自定义FOV)
+- 视野倍数调节 (0.2x-3.0x)
+
 #### 使用方法
 1. **安装Mod**:
    - 手动安装：将DashPlus.dll放入游戏Mods文件夹
@@ -46,6 +50,7 @@
 - ✅ 安全的参数边界检查
 - ✅ 惯性控制系统（基于加速度调节实现）
 - ✅ 无限负重系统（通过修改MaxWeight属性实现）
+- ✅ 视野控制系统（通过修改FOV参数实现）
 
 ---
 
@@ -71,6 +76,10 @@
 #### Weight Settings Parameters
 - Infinite Weight Toggle (Ignore weight restrictions, carry items of any weight)
 
+#### FOV Settings Parameters
+- Custom FOV Toggle (Enable/Disable custom field of view)
+- FOV Multiplier Adjustment (0.2x-3.0x)
+
 #### Usage
 1. **Install Mod**:
    - Manual Installation: Place DashPlus.dll in the game Mods folder
@@ -91,6 +100,7 @@
 - ✅ Safe parameter boundary checking
 - ✅ Inertia control system (implemented through acceleration adjustment)
 - ✅ Infinite weight system (implemented by modifying MaxWeight property)
+- ✅ FOV control system (modifies FOV parameters)
 
 ---
 

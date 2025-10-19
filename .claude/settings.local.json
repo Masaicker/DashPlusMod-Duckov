@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Read(//d/zd/ModEditor/Duck/libs/TeamSoda.Duckov.Core/**)"
+      "Read(//d/zd/ModEditor/Duck/libs/TeamSoda.Duckov.Core/**)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": [],

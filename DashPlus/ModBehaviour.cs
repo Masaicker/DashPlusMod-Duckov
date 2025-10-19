@@ -33,6 +33,12 @@ namespace DashPlus
         [Tooltip("启用无限负重，无视重量限制")]
         public bool enableInfiniteWeight = false;
 
+        [Header("视野设置")]
+        [Tooltip("视野倍数，1.0=原始视野")]
+        public float fovMultiplier = 1.0f;
+        [Tooltip("启用自定义视野")]
+        public bool enableCustomFOV = false;
+
         [Header("调试设置")]
         [Tooltip("是否输出调试日志")] public bool enableLogging = false;
 
@@ -55,13 +61,17 @@ namespace DashPlus
         // 负重原始值
         private float originalMaxWeight;
 
+        // 视野原始值
+        private float originalDefaultFOV;
+        private float originalAdsFOV;
+
         // GUI控制
         private bool showGUI = false;
         private Rect guiRect = new Rect(Screen.width / 2 - 250, Screen.height / 2 - 200, 500, 400);
 
         // 标签页控制
-        private int selectedTab = 0; // 0: 闪避, 1: 奔跑, 2: 其他设置
-        private readonly string[] tabNames = { "闪避 / Dash", "奔跑 / Run", "其他 / Others" };
+        private int selectedTab = 0; // 0: 闪避, 1: 奔跑, 2: 视野, 3: 其他设置
+        private readonly string[] tabNames = { "闪避 / Dash", "奔跑 / Run", "视野 / FOV", "其他 / Others" };
 
         protected override void OnAfterSetup()
         {
@@ -131,6 +141,14 @@ namespace DashPlus
 
                     // 负重原始值
                     originalMaxWeight = maxWeightStat?.BaseValue ?? main.MaxWeight;
+
+                    // 视野原始值
+                    var gameCamera = GameCamera.Instance;
+                    if (gameCamera != null)
+                    {
+                        originalDefaultFOV = gameCamera.defaultFOV;
+                        originalAdsFOV = gameCamera.adsFOV;
+                    }
                 }
                 else
                 {
@@ -143,6 +161,14 @@ namespace DashPlus
                     originalWalkAcc = main.CharacterWalkAcc;
                     originalRunAcc = main.CharacterRunAcc;
                     originalMaxWeight = main.MaxWeight;
+
+                    // 视野原始值备用方案
+                    var gameCamera = GameCamera.Instance;
+                    if (gameCamera != null)
+                    {
+                        originalDefaultFOV = gameCamera.defaultFOV;
+                        originalAdsFOV = gameCamera.adsFOV;
+                    }
                 }
 
                 hasOriginalValues = true;
@@ -154,6 +180,7 @@ namespace DashPlus
                 LogMessage(
                     $"移动惯性原始值: 步行加速度={originalWalkAcc:F2}, 奔跑加速度={originalRunAcc:F2}");
                 LogMessage($"负重原始值: 最大负重={originalMaxWeight:F2}");
+                LogMessage($"视野原始值: 默认={originalDefaultFOV:F2}, 瞄准={originalAdsFOV:F2}");
             }
 
             ApplyMod(main);
@@ -175,6 +202,9 @@ namespace DashPlus
 
             // 应用负重修改
             ApplyWeightMod(main);
+
+            // 应用视野修改
+            ApplyFOVMod();
         }
 
         void ApplyDashMod(CharacterMainControl main, CA_Dash dash)
@@ -352,6 +382,46 @@ namespace DashPlus
             }
         }
 
+        void ApplyFOVMod()
+        {
+            var gameCamera = GameCamera.Instance;
+            if (gameCamera == null || originalDefaultFOV <= 0) return;
+
+            if (enableCustomFOV)
+            {
+                // 应用视野倍数
+                float targetDefaultFOV = fovMultiplier == 1.0f ? originalDefaultFOV : originalDefaultFOV * fovMultiplier;
+                float targetAdsFOV = fovMultiplier == 1.0f ? originalAdsFOV : originalAdsFOV * fovMultiplier;
+
+                if (gameCamera.defaultFOV != targetDefaultFOV)
+                {
+                    gameCamera.defaultFOV = targetDefaultFOV;
+                    LogMessage($"默认视野修改: {originalDefaultFOV:F2} -> {targetDefaultFOV:F2} (倍数={fovMultiplier})");
+                }
+
+                if (gameCamera.adsFOV != targetAdsFOV)
+                {
+                    gameCamera.adsFOV = targetAdsFOV;
+                    LogMessage($"瞄准视野修改: {originalAdsFOV:F2} -> {targetAdsFOV:F2} (倍数={fovMultiplier})");
+                }
+            }
+            else
+            {
+                // 恢复原始视野值
+                if (gameCamera.defaultFOV != originalDefaultFOV)
+                {
+                    gameCamera.defaultFOV = originalDefaultFOV;
+                    LogMessage($"默认视野已恢复: {originalDefaultFOV:F2}");
+                }
+
+                if (gameCamera.adsFOV != originalAdsFOV)
+                {
+                    gameCamera.adsFOV = originalAdsFOV;
+                    LogMessage($"瞄准视野已恢复: {originalAdsFOV:F2}");
+                }
+            }
+        }
+
         void LoadSettings()
         {
             // 闪避参数
@@ -372,8 +442,12 @@ namespace DashPlus
             // 负重参数
             enableInfiniteWeight = PlayerPrefs.GetInt("DashPlus_InfiniteWeight", 0) == 1;
 
+            // 视野参数
+            enableCustomFOV = PlayerPrefs.GetInt("DashPlus_CustomFOV", 0) == 1;
+            fovMultiplier = PlayerPrefs.GetFloat("DashPlus_FOV", 1.0f);
+
             enableLogging = PlayerPrefs.GetInt("DashPlus_Logging", 0) == 1;
-            LogMessage($"设置已加载: 闪避(距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s), 奔跑(步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x), 惯性(禁用={disableMovementInertia}), 负重(无限={enableInfiniteWeight}), 日志={enableLogging}");
+            LogMessage($"设置已加载: 闪避(距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s), 奔跑(步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x), 惯性(禁用={disableMovementInertia}), 负重(无限={enableInfiniteWeight}), 视野(自定义={enableCustomFOV}, 倍数={fovMultiplier:F1}x), 日志={enableLogging}");
         }
 
         void SaveSettings()
@@ -395,6 +469,10 @@ namespace DashPlus
 
             // 负重参数
             PlayerPrefs.SetInt("DashPlus_InfiniteWeight", enableInfiniteWeight ? 1 : 0);
+
+            // 视野参数
+            PlayerPrefs.SetInt("DashPlus_CustomFOV", enableCustomFOV ? 1 : 0);
+            PlayerPrefs.SetFloat("DashPlus_FOV", fovMultiplier);
 
             PlayerPrefs.SetInt("DashPlus_Logging", enableLogging ? 1 : 0);
             PlayerPrefs.Save();
@@ -460,7 +538,10 @@ namespace DashPlus
                 case 1: // 奔跑参数
                     DrawRunTab();
                     break;
-                case 2: // 其他设置
+                case 2: // 视野设置
+                    DrawFOVTab();
+                    break;
+                case 3: // 其他设置
                     DrawSettingsTab();
                     break;
             }
@@ -675,6 +756,43 @@ namespace DashPlus
             }
         }
 
+        void DrawFOVTab()
+        {
+            GUILayout.Label("=== 视野设置 / FOV Settings ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            // 自定义视野开关
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("自定义视野 / Custom FOV:", GUILayout.Width(200));
+            bool newCustomFOV = GUILayout.Toggle(enableCustomFOV, enableCustomFOV ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            GUILayout.EndHorizontal();
+
+            if (newCustomFOV != enableCustomFOV)
+            {
+                enableCustomFOV = newCustomFOV;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            GUILayout.Space(10);
+
+            // 视野倍数滑块 - 仅在启用自定义视野时可用
+            GUI.enabled = enableCustomFOV; // 禁用状态下变灰
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("视野倍数 / FOV Multiplier:", GUILayout.Width(200));
+            float newFOVMultiplier = GUILayout.HorizontalSlider(fovMultiplier, 0.2f, 3.0f, GUILayout.Width(200));
+            GUILayout.Label($"{fovMultiplier:F1}x", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+            GUI.enabled = true; // 恢复启用状态
+
+            if (newFOVMultiplier != fovMultiplier && enableCustomFOV)
+            {
+                fovMultiplier = newFOVMultiplier;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+        }
+
         void ResetAllParameters()
         {
             // 重置闪避参数
@@ -694,6 +812,10 @@ namespace DashPlus
 
             // 重置负重参数
             enableInfiniteWeight = false;
+
+            // 重置视野参数
+            enableCustomFOV = false;
+            fovMultiplier = 1.0f;
 
             SaveSettings();
             ApplyModIfExists();
@@ -802,6 +924,23 @@ namespace DashPlus
                             maxWeightStat.BaseValue = originalMaxWeight;
                             LogMessage($"最大负重已恢复: {originalMaxWeight:F2}");
                         }
+                    }
+                }
+
+                // 恢复视野原始值
+                var gameCamera = GameCamera.Instance;
+                if (gameCamera != null && enableCustomFOV && originalDefaultFOV > 0)
+                {
+                    if (gameCamera.defaultFOV != originalDefaultFOV)
+                    {
+                        gameCamera.defaultFOV = originalDefaultFOV;
+                        LogMessage($"默认视野已恢复: {originalDefaultFOV:F2}");
+                    }
+
+                    if (gameCamera.adsFOV != originalAdsFOV)
+                    {
+                        gameCamera.adsFOV = originalAdsFOV;
+                        LogMessage($"瞄准视野已恢复: {originalAdsFOV:F2}");
                     }
                 }
 
