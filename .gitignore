@@ -50,3 +50,7 @@ Thumbs.db
 *.bak
 *.tmp
 *.backup
+
+# Claude Code configuration
+.claude/
+CLAUDE.md
