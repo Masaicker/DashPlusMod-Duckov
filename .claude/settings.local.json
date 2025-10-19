@@ -4,7 +4,10 @@
       "Read(//d/zd/ModEditor/Duck/libs/TeamSoda.Duckov.Core/**)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "D:\\zd\\ModEditor\\Duck\\libs"
+    ]
   },
   "outputStyle": "Linus"
 }

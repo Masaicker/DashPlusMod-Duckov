@@ -29,6 +29,10 @@ namespace DashPlus
         [Tooltip("禁用移动惯性，开启后角色移动没有惯性打滑效果")]
         public bool disableMovementInertia = false;
 
+        [Header("负重设置")]
+        [Tooltip("启用无限负重，无视重量限制")]
+        public bool enableInfiniteWeight = false;
+
         [Header("调试设置")]
         [Tooltip("是否输出调试日志")] public bool enableLogging = false;
 
@@ -48,9 +52,12 @@ namespace DashPlus
         private float originalWalkAcc;
         private float originalRunAcc;
 
+        // 负重原始值
+        private float originalMaxWeight;
+
         // GUI控制
         private bool showGUI = false;
-        private Rect guiRect = new Rect(Screen.width / 2 - 200, Screen.height / 2 - 280, 400, 620);
+        private Rect guiRect = new Rect(Screen.width / 2 - 250, Screen.height / 2 - 280, 500, 680);
 
         protected override void OnAfterSetup()
         {
@@ -104,6 +111,9 @@ namespace DashPlus
                     var walkAccStat = main.CharacterItem.GetStat("WalkAcc".GetHashCode());
                     var runAccStat = main.CharacterItem.GetStat("RunAcc".GetHashCode());
 
+                    // 负重参数
+                    var maxWeightStat = main.CharacterItem.GetStat("MaxWeight".GetHashCode());
+
                     // 奔跑参数原始值
                     originalWalkSpeed = walkStat?.BaseValue ?? main.CharacterWalkSpeed;
                     originalRunSpeed = runStat?.BaseValue ?? main.CharacterRunSpeed;
@@ -114,6 +124,9 @@ namespace DashPlus
                     // 移动惯性原始值
                     originalWalkAcc = walkAccStat?.BaseValue ?? main.CharacterWalkAcc;
                     originalRunAcc = runAccStat?.BaseValue ?? main.CharacterRunAcc;
+
+                    // 负重原始值
+                    originalMaxWeight = maxWeightStat?.BaseValue ?? main.MaxWeight;
                 }
                 else
                 {
@@ -125,6 +138,7 @@ namespace DashPlus
                     originalStaminaRecoverTime = main.StaminaRecoverTime;
                     originalWalkAcc = main.CharacterWalkAcc;
                     originalRunAcc = main.CharacterRunAcc;
+                    originalMaxWeight = main.MaxWeight;
                 }
 
                 hasOriginalValues = true;
@@ -135,6 +149,7 @@ namespace DashPlus
                     $"奔跑原始值: 步速={originalWalkSpeed:F2}, 奔速={originalRunSpeed:F2}, 消耗率={originalStaminaDrainRate:F2}, 恢复率={originalStaminaRecoverRate:F2}, 恢复延迟={originalStaminaRecoverTime:F2}");
                 LogMessage(
                     $"移动惯性原始值: 步行加速度={originalWalkAcc:F2}, 奔跑加速度={originalRunAcc:F2}");
+                LogMessage($"负重原始值: 最大负重={originalMaxWeight:F2}");
             }
 
             ApplyMod(main);
@@ -150,6 +165,12 @@ namespace DashPlus
 
             // 应用奔跑参数修改
             ApplyRunMod(main);
+
+            // 应用移动手感修改
+            ApplyInertiaMod(main);
+
+            // 应用负重修改
+            ApplyWeightMod(main);
         }
 
         void ApplyDashMod(CharacterMainControl main, CA_Dash dash)
@@ -252,9 +273,6 @@ namespace DashPlus
                     LogMessage($"体力恢复延迟修改: {originalStaminaRecoverTime:F2} -> {targetRecoverTime:F2} (倍数={staminaRecoverTimeMultiplier})");
                 }
             }
-
-            // 应用惯性设置
-            ApplyInertiaMod(main);
         }
 
         void ApplyInertiaMod(CharacterMainControl main)
@@ -299,6 +317,37 @@ namespace DashPlus
             }
         }
 
+        void ApplyWeightMod(CharacterMainControl main)
+        {
+            if (main.CharacterItem == null) return;
+
+            // 获取负重统计对象
+            var maxWeightStat = main.CharacterItem.GetStat("MaxWeight".GetHashCode());
+
+            if (maxWeightStat != null && originalMaxWeight > 0)
+            {
+                if (enableInfiniteWeight)
+                {
+                    // 启用无限负重：设置一个极大的值
+                    float infiniteWeight = 9999999f;
+                    if (maxWeightStat.BaseValue != infiniteWeight)
+                    {
+                        maxWeightStat.BaseValue = infiniteWeight;
+                        LogMessage($"无限负重已启用: {originalMaxWeight:F2} -> {infiniteWeight:F2}");
+                    }
+                }
+                else
+                {
+                    // 恢复原始负重值
+                    if (maxWeightStat.BaseValue != originalMaxWeight)
+                    {
+                        maxWeightStat.BaseValue = originalMaxWeight;
+                        LogMessage($"负重已恢复: {originalMaxWeight:F2}");
+                    }
+                }
+            }
+        }
+
         void LoadSettings()
         {
             // 闪避参数
@@ -316,8 +365,11 @@ namespace DashPlus
             // 移动惯性参数
             disableMovementInertia = PlayerPrefs.GetInt("DashPlus_DisableInertia", 0) == 1;
 
+            // 负重参数
+            enableInfiniteWeight = PlayerPrefs.GetInt("DashPlus_InfiniteWeight", 0) == 1;
+
             enableLogging = PlayerPrefs.GetInt("DashPlus_Logging", 0) == 1;
-            LogMessage($"设置已加载: 闪避(距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s), 奔跑(步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x), 惯性(禁用={disableMovementInertia}), 日志={enableLogging}");
+            LogMessage($"设置已加载: 闪避(距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s), 奔跑(步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x), 惯性(禁用={disableMovementInertia}), 负重(无限={enableInfiniteWeight}), 日志={enableLogging}");
         }
 
         void SaveSettings()
@@ -336,6 +388,9 @@ namespace DashPlus
 
             // 移动惯性参数
             PlayerPrefs.SetInt("DashPlus_DisableInertia", disableMovementInertia ? 1 : 0);
+
+            // 负重参数
+            PlayerPrefs.SetInt("DashPlus_InfiniteWeight", enableInfiniteWeight ? 1 : 0);
 
             PlayerPrefs.SetInt("DashPlus_Logging", enableLogging ? 1 : 0);
             PlayerPrefs.Save();
@@ -502,6 +557,25 @@ namespace DashPlus
                 ApplyModIfExists();
             }
 
+            GUILayout.Space(10);
+
+            // === 负重设置区域 ===
+            GUILayout.Label("=== 负重设置 / Weight Settings ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            // 无限负重开关
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("无限负重 / Infinite Weight:", GUILayout.Width(180));
+            bool newInfiniteWeight = GUILayout.Toggle(enableInfiniteWeight, enableInfiniteWeight ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            GUILayout.EndHorizontal();
+
+            if (newInfiniteWeight != enableInfiniteWeight)
+            {
+                enableInfiniteWeight = newInfiniteWeight;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
             GUILayout.Space(5);
 
             // === 其他设置区域 ===
@@ -540,6 +614,9 @@ namespace DashPlus
 
                 // 重置移动手感参数
                 disableMovementInertia = false;
+
+                // 重置负重参数
+                enableInfiniteWeight = false;
 
                 SaveSettings();
                 ApplyModIfExists();
@@ -645,6 +722,17 @@ namespace DashPlus
                         {
                             runAccStat.BaseValue = originalRunAcc;
                             LogMessage($"奔跑加速度已恢复: {originalRunAcc:F2}");
+                        }
+                    }
+
+                    // 恢复负重原始值
+                    if (enableInfiniteWeight && originalMaxWeight > 0)
+                    {
+                        var maxWeightStat = main.CharacterItem.GetStat("MaxWeight".GetHashCode());
+                        if (maxWeightStat != null)
+                        {
+                            maxWeightStat.BaseValue = originalMaxWeight;
+                            LogMessage($"最大负重已恢复: {originalMaxWeight:F2}");
                         }
                     }
                 }

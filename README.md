@@ -23,6 +23,9 @@
 #### 移动手感参数
 - 惯性控制开关 (禁用/启用移动惯性效果)
 
+#### 负重设置参数
+- 无限负重开关 (无视重量限制，可携带任意重量的物品)
+
 #### 使用方法
 1. **安装Mod**:
    - 手动安装：将DashPlus.dll放入游戏Mods文件夹
@@ -42,6 +45,7 @@
 - ✅ 详细的调试日志输出
 - ✅ 安全的参数边界检查
 - ✅ 惯性控制系统（基于加速度调节实现）
+- ✅ 无限负重系统（通过修改MaxWeight属性实现）
 
 ---
 
@@ -64,6 +68,9 @@
 #### Movement Feel Parameters
 - Inertia Control Toggle (Disable/Enable movement inertia effects)
 
+#### Weight Settings Parameters
+- Infinite Weight Toggle (Ignore weight restrictions, carry items of any weight)
+
 #### Usage
 1. **Install Mod**:
    - Manual Installation: Place DashPlus.dll in the game Mods folder
@@ -83,6 +90,7 @@
 - ✅ Detailed debug logging output
 - ✅ Safe parameter boundary checking
 - ✅ Inertia control system (implemented through acceleration adjustment)
+- ✅ Infinite weight system (implemented by modifying MaxWeight property)
 
 ---
 
