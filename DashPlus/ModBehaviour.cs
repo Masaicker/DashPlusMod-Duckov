@@ -1,0 +1,531 @@
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace DashPlus
+{
+    public class ModBehaviour : Duckov.Modding.ModBehaviour
+    {
+        [Header("闪避参数直接设置")]
+        [Tooltip("闪避距离倍数，1.0=原始距离")]
+        public float dashDistanceMultiplier = 1;
+        [Tooltip("体力消耗，原始10")]
+        public float staminaCost = 10;
+        [Tooltip("冷却时间(秒)，原始0.5")]
+        public float coolTime = 0.5f;
+
+        [Header("奔跑参数直接设置")]
+        [Tooltip("步行速度倍数，1.0=原始速度")]
+        public float walkSpeedMultiplier = 1;
+        [Tooltip("奔跑速度倍数，1.0=原始速度")]
+        public float runSpeedMultiplier = 1;
+        [Tooltip("体力消耗率倍数，1.0=原始消耗率")]
+        public float staminaDrainRateMultiplier = 1;
+        [Tooltip("体力恢复率倍数，1.0=原始恢复率")]
+        public float staminaRecoverRateMultiplier = 1;
+        [Tooltip("体力恢复延迟倍数，1.0=原始延迟")]
+        public float staminaRecoverTimeMultiplier = 1;
+
+        [Header("调试设置")]
+        [Tooltip("是否输出调试日志")] public bool enableLogging = false;
+
+        private bool hasOriginalValues;
+        private AnimationCurve? originalSpeedCurve;
+        private float originalStaminaCost;
+        private float originalCoolTime;
+
+        // 奔跑参数原始值
+        private float originalWalkSpeed;
+        private float originalRunSpeed;
+        private float originalStaminaDrainRate;
+        private float originalStaminaRecoverRate;
+        private float originalStaminaRecoverTime;
+
+        // GUI控制
+        private bool showGUI = false;
+        private Rect guiRect = new Rect(Screen.width / 2 - 200, Screen.height / 2 - 250, 400, 550);
+
+        protected override void OnAfterSetup()
+        {
+            base.OnAfterSetup();
+            SceneManager.sceneLoaded += OnSceneLoaded;
+
+            LoadSettings();
+            Invoke(nameof(ApplyModIfExists), 1f);
+        }
+
+        void Update()
+        {
+            // 检查快捷键：Ctrl+G 显示/隐藏GUI
+            if (Input.GetKeyDown(KeyCode.G) && Input.GetKey(KeyCode.LeftControl))
+            {
+                showGUI = !showGUI;
+                LogMessage($"GUI {(showGUI ? "显示" : "隐藏")}");
+            }
+        }
+
+        void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            LogMessage($"场景切换: {scene.name}");
+            ApplyModIfExists();
+        }
+
+        void ApplyModIfExists()
+        {
+            var main = CharacterMainControl.Main;
+            if (main?.dashAction == null) return;
+
+            // 第一次遇到角色时保存原始值
+            if (!hasOriginalValues)
+            {
+                // 保存闪避参数原始值
+                originalSpeedCurve = main.dashAction.speedCurve;
+                originalStaminaCost = main.dashAction.staminaCost;
+                originalCoolTime = main.dashAction.coolTime;
+
+                // 保存奔跑参数原始值
+                originalWalkSpeed = main.CharacterWalkSpeed;
+                originalRunSpeed = main.CharacterRunSpeed;
+                originalStaminaDrainRate = main.StaminaDrainRate;
+                originalStaminaRecoverRate = main.StaminaRecoverRate;
+                originalStaminaRecoverTime = main.StaminaRecoverTime;
+
+                hasOriginalValues = true;
+
+                LogMessage(
+                    $"闪避原始值: 曲线key数={originalSpeedCurve?.keys.Length}, 体力={originalStaminaCost}, 冷却={originalCoolTime:F2}s");
+                LogMessage(
+                    $"奔跑原始值: 步速={originalWalkSpeed:F2}, 奔速={originalRunSpeed:F2}, 消耗率={originalStaminaDrainRate:F2}, 恢复率={originalStaminaRecoverRate:F2}, 恢复延迟={originalStaminaRecoverTime:F2}");
+            }
+
+            ApplyMod(main);
+        }
+
+        void ApplyMod(CharacterMainControl main)
+        {
+            var dash = main.dashAction;
+            if (dash == null) return;
+
+            // 应用闪避参数修改
+            ApplyDashMod(main, dash);
+
+            // 应用奔跑参数修改
+            ApplyRunMod(main);
+        }
+
+        void ApplyDashMod(CharacterMainControl main, CA_Dash dash)
+        {
+            // 修改speedCurve来控制闪避距离
+            if (originalSpeedCurve != null)
+            {
+                if (dashDistanceMultiplier == 1.0f)
+                {
+                    // 重置为原始曲线
+                    dash.speedCurve = originalSpeedCurve;
+                }
+                else
+                {
+                    // 应用修改后的曲线
+                    AnimationCurve newCurve = new AnimationCurve();
+                    for (int i = 0; i < originalSpeedCurve.keys.Length; i++)
+                    {
+                        Keyframe key = originalSpeedCurve.keys[i];
+                        newCurve.AddKey(new Keyframe(key.time, key.value * dashDistanceMultiplier, key.inTangent,
+                            key.outTangent));
+                    }
+
+                    dash.speedCurve = newCurve;
+                    LogMessage(
+                        $"SpeedCurve修改: 原始keys={originalSpeedCurve.keys.Length}, 倍数={dashDistanceMultiplier}");
+                }
+            }
+
+            // 直接设置体力消耗 - 总是应用当前值
+            dash.staminaCost = staminaCost;
+
+            // 直接设置冷却时间 - 总是应用当前值
+            dash.coolTime = coolTime;
+
+            LogMessage(
+                $"闪避已应用: 距离倍数={dashDistanceMultiplier}x, 体力={dash.staminaCost:F1}, 冷却={dash.coolTime:F2}s");
+        }
+
+        void ApplyRunMod(CharacterMainControl main)
+        {
+            if (main.CharacterItem == null) return;
+
+            // 修改步行速度
+            var walkStat = main.CharacterItem.GetStat("WalkSpeed".GetHashCode());
+            if (walkStat != null && originalWalkSpeed > 0)
+            {
+                float targetWalkSpeed = walkSpeedMultiplier == 1.0f ? originalWalkSpeed : originalWalkSpeed * walkSpeedMultiplier;
+                if (walkStat.BaseValue != targetWalkSpeed)
+                {
+                    walkStat.BaseValue = targetWalkSpeed;
+                    LogMessage($"步行速度修改: {originalWalkSpeed:F2} -> {targetWalkSpeed:F2} (倍数={walkSpeedMultiplier})");
+                }
+            }
+
+            // 修改奔跑速度
+            var runStat = main.CharacterItem.GetStat("RunSpeed".GetHashCode());
+            if (runStat != null && originalRunSpeed > 0)
+            {
+                float targetRunSpeed = runSpeedMultiplier == 1.0f ? originalRunSpeed : originalRunSpeed * runSpeedMultiplier;
+                if (runStat.BaseValue != targetRunSpeed)
+                {
+                    runStat.BaseValue = targetRunSpeed;
+                    LogMessage($"奔跑速度修改: {originalRunSpeed:F2} -> {targetRunSpeed:F2} (倍数={runSpeedMultiplier})");
+                }
+            }
+
+            // 修改体力消耗率
+            var drainStat = main.CharacterItem.GetStat("StaminaDrainRate".GetHashCode());
+            if (drainStat != null && originalStaminaDrainRate > 0)
+            {
+                float targetDrainRate = staminaDrainRateMultiplier == 1.0f ? originalStaminaDrainRate : originalStaminaDrainRate * staminaDrainRateMultiplier;
+                if (drainStat.BaseValue != targetDrainRate)
+                {
+                    drainStat.BaseValue = targetDrainRate;
+                    LogMessage($"体力消耗率修改: {originalStaminaDrainRate:F2} -> {targetDrainRate:F2} (倍数={staminaDrainRateMultiplier})");
+                }
+            }
+
+            // 修改体力恢复率
+            var recoverStat = main.CharacterItem.GetStat("StaminaRecoverRate".GetHashCode());
+            if (recoverStat != null && originalStaminaRecoverRate > 0)
+            {
+                float targetRecoverRate = staminaRecoverRateMultiplier == 1.0f ? originalStaminaRecoverRate : originalStaminaRecoverRate * staminaRecoverRateMultiplier;
+                if (recoverStat.BaseValue != targetRecoverRate)
+                {
+                    recoverStat.BaseValue = targetRecoverRate;
+                    LogMessage($"体力恢复率修改: {originalStaminaRecoverRate:F2} -> {targetRecoverRate:F2} (倍数={staminaRecoverRateMultiplier})");
+                }
+            }
+
+            // 修改体力恢复延迟
+            var recoverTimeStat = main.CharacterItem.GetStat("StaminaRecoverTime".GetHashCode());
+            if (recoverTimeStat != null && originalStaminaRecoverTime > 0)
+            {
+                float targetRecoverTime = staminaRecoverTimeMultiplier == 1.0f ? originalStaminaRecoverTime : originalStaminaRecoverTime * staminaRecoverTimeMultiplier;
+                if (recoverTimeStat.BaseValue != targetRecoverTime)
+                {
+                    recoverTimeStat.BaseValue = targetRecoverTime;
+                    LogMessage($"体力恢复延迟修改: {originalStaminaRecoverTime:F2} -> {targetRecoverTime:F2} (倍数={staminaRecoverTimeMultiplier})");
+                }
+            }
+        }
+
+        void LoadSettings()
+        {
+            // 闪避参数
+            dashDistanceMultiplier = PlayerPrefs.GetFloat("DashPlus_DashDistance", 1.0f);
+            staminaCost = PlayerPrefs.GetFloat("DashPlus_Stamina", 10f);
+            coolTime = PlayerPrefs.GetFloat("DashPlus_CoolTime", 0.5f);
+
+            // 奔跑参数
+            walkSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_WalkSpeed", 1.0f);
+            runSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_RunSpeed", 1.0f);
+            staminaDrainRateMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaDrain", 1.0f);
+            staminaRecoverRateMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaRecover", 1.0f);
+            staminaRecoverTimeMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaRecoverTime", 1.0f);
+
+            enableLogging = PlayerPrefs.GetInt("DashPlus_Logging", 0) == 1;
+            LogMessage($"设置已加载: 闪避(距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s), 奔跑(步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x), 日志={enableLogging}");
+        }
+
+        void SaveSettings()
+        {
+            // 闪避参数
+            PlayerPrefs.SetFloat("DashPlus_DashDistance", dashDistanceMultiplier);
+            PlayerPrefs.SetFloat("DashPlus_Stamina", staminaCost);
+            PlayerPrefs.SetFloat("DashPlus_CoolTime", coolTime);
+
+            // 奔跑参数
+            PlayerPrefs.SetFloat("DashPlus_WalkSpeed", walkSpeedMultiplier);
+            PlayerPrefs.SetFloat("DashPlus_RunSpeed", runSpeedMultiplier);
+            PlayerPrefs.SetFloat("DashPlus_StaminaDrain", staminaDrainRateMultiplier);
+            PlayerPrefs.SetFloat("DashPlus_StaminaRecover", staminaRecoverRateMultiplier);
+            PlayerPrefs.SetFloat("DashPlus_StaminaRecoverTime", staminaRecoverTimeMultiplier);
+
+            PlayerPrefs.SetInt("DashPlus_Logging", enableLogging ? 1 : 0);
+            PlayerPrefs.Save();
+            LogMessage("设置已保存");
+        }
+
+        void OnGUI()
+        {
+            if (!showGUI) return;
+
+            GUI.skin.window.fontSize = 14;
+            GUI.skin.label.fontSize = 14;
+            GUI.skin.horizontalSlider.fixedHeight = 20;
+            GUI.skin.horizontalSliderThumb.fixedHeight = 25;
+            GUI.skin.horizontalSliderThumb.fixedWidth = 25;
+
+            int windowId = 12345;
+            guiRect = GUI.Window(windowId, guiRect, DoWindow, "DashPlus 增强控制面板");
+        }
+
+        void DoWindow(int windowId)
+        {
+            GUILayout.BeginVertical();
+
+            // === 闪避参数区域 ===
+            GUILayout.Label("=== 闪避参数 / Dash Parameters ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            // 闪避距离倍数
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("闪避距离倍数 / Dash Distance:", GUILayout.Width(180));
+            float newDashMultiplier =
+                GUILayout.HorizontalSlider(dashDistanceMultiplier, 0.1f, 5.0f, GUILayout.Width(150));
+            GUILayout.Label($"{dashDistanceMultiplier:F1}x", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (newDashMultiplier != dashDistanceMultiplier)
+            {
+                dashDistanceMultiplier = newDashMultiplier;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            // 体力消耗
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("体力消耗 / Stamina Cost:", GUILayout.Width(180));
+            float newStamina = GUILayout.HorizontalSlider(staminaCost, 0f, 50f, GUILayout.Width(150));
+            GUILayout.Label($"{staminaCost:F1}", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (newStamina != staminaCost)
+            {
+                staminaCost = newStamina;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            // 冷却时间
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("冷却时间(秒) / Cooldown (s):", GUILayout.Width(180));
+            float newCoolTime = GUILayout.HorizontalSlider(coolTime, 0f, 5f, GUILayout.Width(150));
+            GUILayout.Label($"{coolTime:F2}s", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (newCoolTime != coolTime)
+            {
+                coolTime = newCoolTime;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            GUILayout.Space(10);
+
+            // === 奔跑参数区域 ===
+            GUILayout.Label("=== 奔跑参数 / Run Parameters ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            // 步行速度倍数
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("步行速度倍数 / Walk Speed:", GUILayout.Width(180));
+            float newWalkMultiplier = GUILayout.HorizontalSlider(walkSpeedMultiplier, 1f, 5.0f, GUILayout.Width(150));
+            GUILayout.Label($"{walkSpeedMultiplier:F1}x", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (newWalkMultiplier != walkSpeedMultiplier)
+            {
+                walkSpeedMultiplier = newWalkMultiplier;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            // 奔跑速度倍数
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("奔跑速度倍数 / Run Speed:", GUILayout.Width(180));
+            float newRunMultiplier = GUILayout.HorizontalSlider(runSpeedMultiplier, 1f, 5.0f, GUILayout.Width(150));
+            GUILayout.Label($"{runSpeedMultiplier:F1}x", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (newRunMultiplier != runSpeedMultiplier)
+            {
+                runSpeedMultiplier = newRunMultiplier;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            // 体力消耗率倍数
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("体力消耗率倍数 / Stamina Drain:", GUILayout.Width(180));
+            float newDrainMultiplier = GUILayout.HorizontalSlider(staminaDrainRateMultiplier, 0, 5.0f, GUILayout.Width(150));
+            GUILayout.Label($"{staminaDrainRateMultiplier:F1}x", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (newDrainMultiplier != staminaDrainRateMultiplier)
+            {
+                staminaDrainRateMultiplier = newDrainMultiplier;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            // 体力恢复率倍数
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("体力恢复率倍数 / Stamina Recover:", GUILayout.Width(180));
+            float newRecoverMultiplier = GUILayout.HorizontalSlider(staminaRecoverRateMultiplier, 1f, 5.0f, GUILayout.Width(150));
+            GUILayout.Label($"{staminaRecoverRateMultiplier:F1}x", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (newRecoverMultiplier != staminaRecoverRateMultiplier)
+            {
+                staminaRecoverRateMultiplier = newRecoverMultiplier;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            // 体力恢复延迟倍数
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("体力恢复延迟倍数 / Recover Delay:", GUILayout.Width(180));
+            float newRecoverTimeMultiplier = GUILayout.HorizontalSlider(staminaRecoverTimeMultiplier, 0, 5.0f, GUILayout.Width(150));
+            GUILayout.Label($"{staminaRecoverTimeMultiplier:F1}x", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (newRecoverTimeMultiplier != staminaRecoverTimeMultiplier)
+            {
+                staminaRecoverTimeMultiplier = newRecoverTimeMultiplier;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            GUILayout.Space(10);
+
+            // === 其他设置区域 ===
+            GUILayout.Label("=== 其他设置 / Other Settings ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            // 日志开关
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("调试日志 / Debug Logging:", GUILayout.Width(180));
+            bool newLogging = GUILayout.Toggle(enableLogging, enableLogging ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            GUILayout.EndHorizontal();
+
+            if (newLogging != enableLogging)
+            {
+                enableLogging = newLogging;
+                SaveSettings();
+                LogMessage($"日志输出已{(enableLogging ? "开启" : "关闭")}");
+            }
+
+            GUILayout.Space(5);
+
+            // 重置按钮
+            if (GUILayout.Button("重置为默认值 / Reset to Default"))
+            {
+                // 重置闪避参数
+                dashDistanceMultiplier = 1.0f;
+                staminaCost = 10f;
+                coolTime = 0.5f;
+
+                // 重置奔跑参数
+                walkSpeedMultiplier = 1.0f;
+                runSpeedMultiplier = 1.0f;
+                staminaDrainRateMultiplier = 1.0f;
+                staminaRecoverRateMultiplier = 1.0f;
+                staminaRecoverTimeMultiplier = 1.0f;
+
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            GUILayout.Space(5);
+            GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
+
+            GUILayout.EndVertical();
+
+            // 拖动功能
+            GUI.DragWindow();
+        }
+
+        protected override void OnBeforeDeactivate()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+
+            // 恢复原始值
+            if (hasOriginalValues && CharacterMainControl.Main?.dashAction != null)
+            {
+                var main = CharacterMainControl.Main;
+                var dash = main.dashAction;
+
+                // 恢复闪避参数原始值
+                if (originalSpeedCurve != null && dashDistanceMultiplier != 1.0f)
+                {
+                    dash.speedCurve = originalSpeedCurve;
+                }
+
+                dash.staminaCost = originalStaminaCost;
+                dash.coolTime = originalCoolTime;
+
+                // 恢复奔跑参数原始值
+                if (main.CharacterItem != null)
+                {
+                    if (walkSpeedMultiplier != 1.0f && originalWalkSpeed > 0)
+                    {
+                        var walkStat = main.CharacterItem.GetStat("WalkSpeed".GetHashCode());
+                        if (walkStat != null)
+                        {
+                            walkStat.BaseValue = originalWalkSpeed;
+                            LogMessage($"步行速度已恢复: {originalWalkSpeed:F2}");
+                        }
+                    }
+
+                    if (runSpeedMultiplier != 1.0f && originalRunSpeed > 0)
+                    {
+                        var runStat = main.CharacterItem.GetStat("RunSpeed".GetHashCode());
+                        if (runStat != null)
+                        {
+                            runStat.BaseValue = originalRunSpeed;
+                            LogMessage($"奔跑速度已恢复: {originalRunSpeed:F2}");
+                        }
+                    }
+
+                    if (staminaDrainRateMultiplier != 1.0f && originalStaminaDrainRate > 0)
+                    {
+                        var drainStat = main.CharacterItem.GetStat("StaminaDrainRate".GetHashCode());
+                        if (drainStat != null)
+                        {
+                            drainStat.BaseValue = originalStaminaDrainRate;
+                            LogMessage($"体力消耗率已恢复: {originalStaminaDrainRate:F2}");
+                        }
+                    }
+
+                    if (staminaRecoverRateMultiplier != 1.0f && originalStaminaRecoverRate > 0)
+                    {
+                        var recoverStat = main.CharacterItem.GetStat("StaminaRecoverRate".GetHashCode());
+                        if (recoverStat != null)
+                        {
+                            recoverStat.BaseValue = originalStaminaRecoverRate;
+                            LogMessage($"体力恢复率已恢复: {originalStaminaRecoverRate:F2}");
+                        }
+                    }
+
+                    if (staminaRecoverTimeMultiplier != 1.0f && originalStaminaRecoverTime > 0)
+                    {
+                        var recoverTimeStat = main.CharacterItem.GetStat("StaminaRecoverTime".GetHashCode());
+                        if (recoverTimeStat != null)
+                        {
+                            recoverTimeStat.BaseValue = originalStaminaRecoverTime;
+                            LogMessage($"体力恢复延迟已恢复: {originalStaminaRecoverTime:F2}");
+                        }
+                    }
+                }
+
+                LogMessage("所有参数已恢复原始值");
+            }
+
+            base.OnBeforeDeactivate();
+        }
+
+        void LogMessage(string message)
+        {
+            if (enableLogging)
+            {
+                Debug.Log($"[DashPlus] {message}");
+            }
+        }
+    }
+}

@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>enable</Nullable>
+        <Version>1.0.2</Version>
+        <AssemblyVersion>1.0.2.0</AssemblyVersion>
+        <FileVersion>1.0.2.0</FileVersion>
+        <Product>DashPlus</Product>
+        <Company>MHZ</Company>
+        <Copyright>Copyright © 2025 Masaicker</Copyright>
+        <Author>Masaicker</Author>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Reference Include="ItemStatsSystem">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\ItemStatsSystem.dll</HintPath>
+      </Reference>
+      <Reference Include="TeamSoda.Duckov.Core">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\TeamSoda.Duckov.Core.dll</HintPath>
+      </Reference>
+      <Reference Include="TeamSoda.Duckov.Utilities">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\TeamSoda.Duckov.Utilities.dll</HintPath>
+      </Reference>
+      <Reference Include="TeamSoda.MiniLocalizor">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\TeamSoda.MiniLocalizor.dll</HintPath>
+      </Reference>
+      <Reference Include="UnityEngine">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.dll</HintPath>
+      </Reference>
+      <Reference Include="UnityEngine.CoreModule">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      </Reference>
+      <Reference Include="UnityEngine.IMGUIModule">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      </Reference>
+      <Reference Include="UnityEngine.InputLegacyModule">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+</Project>

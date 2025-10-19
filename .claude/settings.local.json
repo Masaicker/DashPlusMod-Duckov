@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/zd/ModEditor/Duck/libs/TeamSoda.Duckov.Core/**)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "outputStyle": "Linus"
+}
