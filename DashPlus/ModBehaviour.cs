@@ -57,7 +57,11 @@ namespace DashPlus
 
         // GUI控制
         private bool showGUI = false;
-        private Rect guiRect = new Rect(Screen.width / 2 - 250, Screen.height / 2 - 280, 500, 680);
+        private Rect guiRect = new Rect(Screen.width / 2 - 250, Screen.height / 2 - 200, 500, 400);
+
+        // 标签页控制
+        private int selectedTab = 0; // 0: 闪避, 1: 奔跑, 2: 其他设置
+        private readonly string[] tabNames = { "闪避 / Dash", "奔跑 / Run", "其他 / Others" };
 
         protected override void OnAfterSetup()
         {
@@ -413,17 +417,99 @@ namespace DashPlus
 
         void DoWindow(int windowId)
         {
+            // 右上角关闭按钮
+            if (GUI.Button(new Rect(guiRect.width - 25, 5, 20, 20), "×"))
+            {
+                showGUI = false;
+            }
+
+            // 增加标题栏下方空间，让标题区域更宽敞
+            GUILayout.Space(15);
+
             GUILayout.BeginVertical();
 
-            // === 闪避参数区域 ===
+            // 标签栏
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < tabNames.Length; i++)
+            {
+                bool isSelected = (selectedTab == i);
+                Color originalColor = GUI.backgroundColor;
+
+                if (isSelected)
+                {
+                    GUI.backgroundColor = Color.gray;
+                }
+
+                if (GUILayout.Button(tabNames[i], GUILayout.Height(30)))
+                {
+                    selectedTab = i;
+                }
+
+                GUI.backgroundColor = originalColor;
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(10);
+
+            // 根据选中的标签页显示不同内容
+            switch (selectedTab)
+            {
+                case 0: // 闪避参数
+                    DrawDashTab();
+                    break;
+                case 1: // 奔跑参数
+                    DrawRunTab();
+                    break;
+                case 2: // 其他设置
+                    DrawSettingsTab();
+                    break;
+            }
+
+            // 通用按钮区域
+            GUILayout.Space(10);
+            GUILayout.Box("", GUILayout.Height(1), GUILayout.ExpandWidth(true));
+            GUILayout.Space(10);
+
+            // 恢复默认按钮
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("恢复默认设置(所有参数) / Reset to Default(All Parameters)", GUILayout.Width(300), GUILayout.Height(40)))
+            {
+                ResetAllParameters();
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(5);
+            GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
+            GUILayout.Label("建议在ESC暂停菜单中使用 / Recommended in ESC pause menu", GUI.skin.box);
+
+            GUILayout.EndVertical();
+
+            // 自动调整窗口高度
+            if (Event.current.type == EventType.Repaint)
+            {
+                Vector2 currentSize = GUILayoutUtility.GetLastRect().size;
+                float targetHeight = Mathf.Max(350f, currentSize.y + 40f); // 最小高度350px，加上边距
+                if (Mathf.Abs(guiRect.height - targetHeight) > 1f)
+                {
+                    guiRect = new Rect(guiRect.x, guiRect.y, guiRect.width, targetHeight);
+                }
+            }
+
+            // 拖动功能
+            GUI.DragWindow();
+        }
+
+        void DrawDashTab()
+        {
             GUILayout.Label("=== 闪避参数 / Dash Parameters ===", GUI.skin.box);
             GUILayout.Space(5);
 
             // 闪避距离倍数
             GUILayout.BeginHorizontal();
             GUILayout.Label("闪避距离倍数 / Dash Distance:", GUILayout.Width(180));
-            float newDashMultiplier =
-                GUILayout.HorizontalSlider(dashDistanceMultiplier, 0.1f, 5.0f, GUILayout.Width(150));
+            float newDashMultiplier = GUILayout.HorizontalSlider(dashDistanceMultiplier, 0.1f, 5.0f, GUILayout.Width(200));
             GUILayout.Label($"{dashDistanceMultiplier:F1}x", GUILayout.Width(50));
             GUILayout.EndHorizontal();
 
@@ -437,7 +523,7 @@ namespace DashPlus
             // 体力消耗
             GUILayout.BeginHorizontal();
             GUILayout.Label("体力消耗 / Stamina Cost:", GUILayout.Width(180));
-            float newStamina = GUILayout.HorizontalSlider(staminaCost, 0f, 50f, GUILayout.Width(150));
+            float newStamina = GUILayout.HorizontalSlider(staminaCost, 0f, 50f, GUILayout.Width(200));
             GUILayout.Label($"{staminaCost:F1}", GUILayout.Width(50));
             GUILayout.EndHorizontal();
 
@@ -451,7 +537,7 @@ namespace DashPlus
             // 冷却时间
             GUILayout.BeginHorizontal();
             GUILayout.Label("冷却时间(秒) / Cooldown (s):", GUILayout.Width(180));
-            float newCoolTime = GUILayout.HorizontalSlider(coolTime, 0f, 5f, GUILayout.Width(150));
+            float newCoolTime = GUILayout.HorizontalSlider(coolTime, 0f, 5f, GUILayout.Width(200));
             GUILayout.Label($"{coolTime:F2}s", GUILayout.Width(50));
             GUILayout.EndHorizontal();
 
@@ -461,17 +547,17 @@ namespace DashPlus
                 SaveSettings();
                 ApplyModIfExists();
             }
+        }
 
-            GUILayout.Space(10);
-
-            // === 奔跑参数区域 ===
+        void DrawRunTab()
+        {
             GUILayout.Label("=== 奔跑参数 / Run Parameters ===", GUI.skin.box);
             GUILayout.Space(5);
 
             // 步行速度倍数
             GUILayout.BeginHorizontal();
             GUILayout.Label("步行速度倍数 / Walk Speed:", GUILayout.Width(180));
-            float newWalkMultiplier = GUILayout.HorizontalSlider(walkSpeedMultiplier, 1f, 5.0f, GUILayout.Width(150));
+            float newWalkMultiplier = GUILayout.HorizontalSlider(walkSpeedMultiplier, 1f, 5.0f, GUILayout.Width(200));
             GUILayout.Label($"{walkSpeedMultiplier:F1}x", GUILayout.Width(50));
             GUILayout.EndHorizontal();
 
@@ -485,7 +571,7 @@ namespace DashPlus
             // 奔跑速度倍数
             GUILayout.BeginHorizontal();
             GUILayout.Label("奔跑速度倍数 / Run Speed:", GUILayout.Width(180));
-            float newRunMultiplier = GUILayout.HorizontalSlider(runSpeedMultiplier, 1f, 5.0f, GUILayout.Width(150));
+            float newRunMultiplier = GUILayout.HorizontalSlider(runSpeedMultiplier, 1f, 5.0f, GUILayout.Width(200));
             GUILayout.Label($"{runSpeedMultiplier:F1}x", GUILayout.Width(50));
             GUILayout.EndHorizontal();
 
@@ -499,7 +585,7 @@ namespace DashPlus
             // 体力消耗率倍数
             GUILayout.BeginHorizontal();
             GUILayout.Label("体力消耗率倍数 / Stamina Drain:", GUILayout.Width(180));
-            float newDrainMultiplier = GUILayout.HorizontalSlider(staminaDrainRateMultiplier, 0, 5.0f, GUILayout.Width(150));
+            float newDrainMultiplier = GUILayout.HorizontalSlider(staminaDrainRateMultiplier, 0, 5.0f, GUILayout.Width(200));
             GUILayout.Label($"{staminaDrainRateMultiplier:F1}x", GUILayout.Width(50));
             GUILayout.EndHorizontal();
 
@@ -513,7 +599,7 @@ namespace DashPlus
             // 体力恢复率倍数
             GUILayout.BeginHorizontal();
             GUILayout.Label("体力恢复率倍数 / Stamina Recover:", GUILayout.Width(180));
-            float newRecoverMultiplier = GUILayout.HorizontalSlider(staminaRecoverRateMultiplier, 1f, 5.0f, GUILayout.Width(150));
+            float newRecoverMultiplier = GUILayout.HorizontalSlider(staminaRecoverRateMultiplier, 1f, 5.0f, GUILayout.Width(200));
             GUILayout.Label($"{staminaRecoverRateMultiplier:F1}x", GUILayout.Width(50));
             GUILayout.EndHorizontal();
 
@@ -527,7 +613,7 @@ namespace DashPlus
             // 体力恢复延迟倍数
             GUILayout.BeginHorizontal();
             GUILayout.Label("体力恢复延迟倍数 / Recover Delay:", GUILayout.Width(180));
-            float newRecoverTimeMultiplier = GUILayout.HorizontalSlider(staminaRecoverTimeMultiplier, 0, 5.0f, GUILayout.Width(150));
+            float newRecoverTimeMultiplier = GUILayout.HorizontalSlider(staminaRecoverTimeMultiplier, 0, 5.0f, GUILayout.Width(200));
             GUILayout.Label($"{staminaRecoverTimeMultiplier:F1}x", GUILayout.Width(50));
             GUILayout.EndHorizontal();
 
@@ -537,16 +623,16 @@ namespace DashPlus
                 SaveSettings();
                 ApplyModIfExists();
             }
+        }
 
-            GUILayout.Space(10);
-
-            // === 移动手感设置区域 ===
-            GUILayout.Label("=== 移动手感 / Movement Feel ===", GUI.skin.box);
+        void DrawSettingsTab()
+        {
+            GUILayout.Label("=== 其他设置 / Other Settings ===", GUI.skin.box);
             GUILayout.Space(5);
 
             // 惯性开关
             GUILayout.BeginHorizontal();
-            GUILayout.Label("禁用移动惯性 / Disable Inertia:", GUILayout.Width(180));
+            GUILayout.Label("禁用移动惯性 / Disable Inertia:", GUILayout.Width(200));
             bool newDisableInertia = GUILayout.Toggle(disableMovementInertia, disableMovementInertia ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
@@ -557,15 +643,9 @@ namespace DashPlus
                 ApplyModIfExists();
             }
 
-            GUILayout.Space(10);
-
-            // === 负重设置区域 ===
-            GUILayout.Label("=== 负重设置 / Weight Settings ===", GUI.skin.box);
-            GUILayout.Space(5);
-
             // 无限负重开关
             GUILayout.BeginHorizontal();
-            GUILayout.Label("无限负重 / Infinite Weight:", GUILayout.Width(180));
+            GUILayout.Label("无限负重 / Infinite Weight:", GUILayout.Width(200));
             bool newInfiniteWeight = GUILayout.Toggle(enableInfiniteWeight, enableInfiniteWeight ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
@@ -576,15 +656,14 @@ namespace DashPlus
                 ApplyModIfExists();
             }
 
-            GUILayout.Space(5);
+            GUILayout.Space(10);
 
-            // === 其他设置区域 ===
-            GUILayout.Label("=== 其他设置 / Other Settings ===", GUI.skin.box);
+            GUILayout.Label("=== 调试设置 / Debug Settings ===", GUI.skin.box);
             GUILayout.Space(5);
 
             // 日志开关
             GUILayout.BeginHorizontal();
-            GUILayout.Label("调试日志 / Debug Logging:", GUILayout.Width(180));
+            GUILayout.Label("调试日志 / Debug Logging:", GUILayout.Width(200));
             bool newLogging = GUILayout.Toggle(enableLogging, enableLogging ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
@@ -594,42 +673,31 @@ namespace DashPlus
                 SaveSettings();
                 LogMessage($"日志输出已{(enableLogging ? "开启" : "关闭")}");
             }
+        }
 
-            GUILayout.Space(5);
+        void ResetAllParameters()
+        {
+            // 重置闪避参数
+            dashDistanceMultiplier = 1.0f;
+            staminaCost = 10f;
+            coolTime = 0.5f;
 
-            // 重置按钮
-            if (GUILayout.Button("重置为默认值 / Reset to Default"))
-            {
-                // 重置闪避参数
-                dashDistanceMultiplier = 1.0f;
-                staminaCost = 10f;
-                coolTime = 0.5f;
+            // 重置奔跑参数
+            walkSpeedMultiplier = 1.0f;
+            runSpeedMultiplier = 1.0f;
+            staminaDrainRateMultiplier = 1.0f;
+            staminaRecoverRateMultiplier = 1.0f;
+            staminaRecoverTimeMultiplier = 1.0f;
 
-                // 重置奔跑参数
-                walkSpeedMultiplier = 1.0f;
-                runSpeedMultiplier = 1.0f;
-                staminaDrainRateMultiplier = 1.0f;
-                staminaRecoverRateMultiplier = 1.0f;
-                staminaRecoverTimeMultiplier = 1.0f;
+            // 重置移动手感参数
+            disableMovementInertia = false;
 
-                // 重置移动手感参数
-                disableMovementInertia = false;
+            // 重置负重参数
+            enableInfiniteWeight = false;
 
-                // 重置负重参数
-                enableInfiniteWeight = false;
-
-                SaveSettings();
-                ApplyModIfExists();
-            }
-
-            GUILayout.Space(5);
-            GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
-            GUILayout.Label("建议在ESC暂停菜单中使用 / Recommended in ESC pause menu", GUI.skin.box);
-
-            GUILayout.EndVertical();
-
-            // 拖动功能
-            GUI.DragWindow();
+            SaveSettings();
+            ApplyModIfExists();
+            LogMessage("所有参数已恢复默认设置");
         }
 
         protected override void OnBeforeDeactivate()
