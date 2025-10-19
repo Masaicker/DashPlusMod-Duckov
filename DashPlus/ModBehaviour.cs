@@ -90,34 +90,42 @@ namespace DashPlus
                 originalStaminaCost = main.dashAction.staminaCost;
                 originalCoolTime = main.dashAction.coolTime;
 
-                // 保存奔跑参数原始值 - 使用 GetStat 的 BaseValue 以保持一致性
+                // 保存所有CharacterItem相关参数的原始值 - 使用 GetStat 的 BaseValue 以保持一致性
                 if (main.CharacterItem != null)
                 {
+                    // 奔跑参数
                     var walkStat = main.CharacterItem.GetStat("WalkSpeed".GetHashCode());
                     var runStat = main.CharacterItem.GetStat("RunSpeed".GetHashCode());
                     var drainStat = main.CharacterItem.GetStat("StaminaDrainRate".GetHashCode());
                     var recoverStat = main.CharacterItem.GetStat("StaminaRecoverRate".GetHashCode());
                     var recoverTimeStat = main.CharacterItem.GetStat("StaminaRecoverTime".GetHashCode());
 
+                    // 移动惯性参数
+                    var walkAccStat = main.CharacterItem.GetStat("WalkAcc".GetHashCode());
+                    var runAccStat = main.CharacterItem.GetStat("RunAcc".GetHashCode());
+
+                    // 奔跑参数原始值
                     originalWalkSpeed = walkStat?.BaseValue ?? main.CharacterWalkSpeed;
                     originalRunSpeed = runStat?.BaseValue ?? main.CharacterRunSpeed;
                     originalStaminaDrainRate = drainStat?.BaseValue ?? main.StaminaDrainRate;
                     originalStaminaRecoverRate = recoverStat?.BaseValue ?? main.StaminaRecoverRate;
                     originalStaminaRecoverTime = recoverTimeStat?.BaseValue ?? main.StaminaRecoverTime;
+
+                    // 移动惯性原始值
+                    originalWalkAcc = walkAccStat?.BaseValue ?? main.CharacterWalkAcc;
+                    originalRunAcc = runAccStat?.BaseValue ?? main.CharacterRunAcc;
                 }
                 else
                 {
-                    // 备用方案：直接从 CharacterMainControl 获取
+                    // 备用方案：直接从 CharacterMainControl 获取所有参数
                     originalWalkSpeed = main.CharacterWalkSpeed;
                     originalRunSpeed = main.CharacterRunSpeed;
                     originalStaminaDrainRate = main.StaminaDrainRate;
                     originalStaminaRecoverRate = main.StaminaRecoverRate;
                     originalStaminaRecoverTime = main.StaminaRecoverTime;
+                    originalWalkAcc = main.CharacterWalkAcc;
+                    originalRunAcc = main.CharacterRunAcc;
                 }
-
-                // 保存移动惯性原始值
-                originalWalkAcc = main.CharacterWalkAcc;
-                originalRunAcc = main.CharacterRunAcc;
 
                 hasOriginalValues = true;
 
