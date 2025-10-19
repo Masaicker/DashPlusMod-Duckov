@@ -25,6 +25,10 @@ namespace DashPlus
         [Tooltip("体力恢复延迟倍数，1.0=原始延迟")]
         public float staminaRecoverTimeMultiplier = 1;
 
+        [Header("移动手感设置")]
+        [Tooltip("禁用移动惯性，开启后角色移动没有惯性打滑效果")]
+        public bool disableMovementInertia = false;
+
         [Header("调试设置")]
         [Tooltip("是否输出调试日志")] public bool enableLogging = false;
 
@@ -40,9 +44,13 @@ namespace DashPlus
         private float originalStaminaRecoverRate;
         private float originalStaminaRecoverTime;
 
+        // 移动惯性原始值
+        private float originalWalkAcc;
+        private float originalRunAcc;
+
         // GUI控制
         private bool showGUI = false;
-        private Rect guiRect = new Rect(Screen.width / 2 - 200, Screen.height / 2 - 250, 400, 550);
+        private Rect guiRect = new Rect(Screen.width / 2 - 200, Screen.height / 2 - 280, 400, 620);
 
         protected override void OnAfterSetup()
         {
@@ -89,12 +97,18 @@ namespace DashPlus
                 originalStaminaRecoverRate = main.StaminaRecoverRate;
                 originalStaminaRecoverTime = main.StaminaRecoverTime;
 
+                // 保存移动惯性原始值
+                originalWalkAcc = main.CharacterWalkAcc;
+                originalRunAcc = main.CharacterRunAcc;
+
                 hasOriginalValues = true;
 
                 LogMessage(
                     $"闪避原始值: 曲线key数={originalSpeedCurve?.keys.Length}, 体力={originalStaminaCost}, 冷却={originalCoolTime:F2}s");
                 LogMessage(
                     $"奔跑原始值: 步速={originalWalkSpeed:F2}, 奔速={originalRunSpeed:F2}, 消耗率={originalStaminaDrainRate:F2}, 恢复率={originalStaminaRecoverRate:F2}, 恢复延迟={originalStaminaRecoverTime:F2}");
+                LogMessage(
+                    $"移动惯性原始值: 步行加速度={originalWalkAcc:F2}, 奔跑加速度={originalRunAcc:F2}");
             }
 
             ApplyMod(main);
@@ -212,6 +226,51 @@ namespace DashPlus
                     LogMessage($"体力恢复延迟修改: {originalStaminaRecoverTime:F2} -> {targetRecoverTime:F2} (倍数={staminaRecoverTimeMultiplier})");
                 }
             }
+
+            // 应用惯性设置
+            ApplyInertiaMod(main);
+        }
+
+        void ApplyInertiaMod(CharacterMainControl main)
+        {
+            if (main.CharacterItem == null) return;
+
+            // 获取加速度统计对象
+            var walkAccStat = main.CharacterItem.GetStat("WalkAcc".GetHashCode());
+            var runAccStat = main.CharacterItem.GetStat("RunAcc".GetHashCode());
+
+            if (disableMovementInertia)
+            {
+                // 禁用惯性：设置极高的加速度值，让速度变化几乎是瞬间的
+                float instantAcc = 9999f; // 超高加速度，实现瞬间移动
+
+                if (walkAccStat != null && originalWalkAcc > 0)
+                {
+                    walkAccStat.BaseValue = instantAcc;
+                    LogMessage($"步行惯性已禁用: {originalWalkAcc:F2} -> {instantAcc:F2}");
+                }
+
+                if (runAccStat != null && originalRunAcc > 0)
+                {
+                    runAccStat.BaseValue = instantAcc;
+                    LogMessage($"奔跑惯性已禁用: {originalRunAcc:F2} -> {instantAcc:F2}");
+                }
+            }
+            else
+            {
+                // 恢复原始加速度值
+                if (walkAccStat != null && originalWalkAcc > 0)
+                {
+                    walkAccStat.BaseValue = originalWalkAcc;
+                    LogMessage($"步行惯性已恢复: {originalWalkAcc:F2}");
+                }
+
+                if (runAccStat != null && originalRunAcc > 0)
+                {
+                    runAccStat.BaseValue = originalRunAcc;
+                    LogMessage($"奔跑惯性已恢复: {originalRunAcc:F2}");
+                }
+            }
         }
 
         void LoadSettings()
@@ -228,8 +287,11 @@ namespace DashPlus
             staminaRecoverRateMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaRecover", 1.0f);
             staminaRecoverTimeMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaRecoverTime", 1.0f);
 
+            // 移动惯性参数
+            disableMovementInertia = PlayerPrefs.GetInt("DashPlus_DisableInertia", 0) == 1;
+
             enableLogging = PlayerPrefs.GetInt("DashPlus_Logging", 0) == 1;
-            LogMessage($"设置已加载: 闪避(距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s), 奔跑(步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x), 日志={enableLogging}");
+            LogMessage($"设置已加载: 闪避(距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s), 奔跑(步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x), 惯性(禁用={disableMovementInertia}), 日志={enableLogging}");
         }
 
         void SaveSettings()
@@ -245,6 +307,9 @@ namespace DashPlus
             PlayerPrefs.SetFloat("DashPlus_StaminaDrain", staminaDrainRateMultiplier);
             PlayerPrefs.SetFloat("DashPlus_StaminaRecover", staminaRecoverRateMultiplier);
             PlayerPrefs.SetFloat("DashPlus_StaminaRecoverTime", staminaRecoverTimeMultiplier);
+
+            // 移动惯性参数
+            PlayerPrefs.SetInt("DashPlus_DisableInertia", disableMovementInertia ? 1 : 0);
 
             PlayerPrefs.SetInt("DashPlus_Logging", enableLogging ? 1 : 0);
             PlayerPrefs.Save();
@@ -394,6 +459,25 @@ namespace DashPlus
 
             GUILayout.Space(10);
 
+            // === 移动手感设置区域 ===
+            GUILayout.Label("=== 移动手感 / Movement Feel ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            // 惯性开关
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("禁用移动惯性 / Disable Inertia:", GUILayout.Width(180));
+            bool newDisableInertia = GUILayout.Toggle(disableMovementInertia, disableMovementInertia ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            GUILayout.EndHorizontal();
+
+            if (newDisableInertia != disableMovementInertia)
+            {
+                disableMovementInertia = newDisableInertia;
+                SaveSettings();
+                ApplyModIfExists();
+            }
+
+            GUILayout.Space(5);
+
             // === 其他设置区域 ===
             GUILayout.Label("=== 其他设置 / Other Settings ===", GUI.skin.box);
             GUILayout.Space(5);
@@ -428,12 +512,16 @@ namespace DashPlus
                 staminaRecoverRateMultiplier = 1.0f;
                 staminaRecoverTimeMultiplier = 1.0f;
 
+                // 重置移动手感参数
+                disableMovementInertia = false;
+
                 SaveSettings();
                 ApplyModIfExists();
             }
 
             GUILayout.Space(5);
             GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
+            GUILayout.Label("建议在ESC暂停菜单中使用 / Recommended in ESC pause menu", GUI.skin.box);
 
             GUILayout.EndVertical();
 
@@ -510,6 +598,27 @@ namespace DashPlus
                         {
                             recoverTimeStat.BaseValue = originalStaminaRecoverTime;
                             LogMessage($"体力恢复延迟已恢复: {originalStaminaRecoverTime:F2}");
+                        }
+                    }
+
+                    // 恢复移动惯性原始值
+                    if (disableMovementInertia && originalWalkAcc > 0)
+                    {
+                        var walkAccStat = main.CharacterItem.GetStat("WalkAcc".GetHashCode());
+                        if (walkAccStat != null)
+                        {
+                            walkAccStat.BaseValue = originalWalkAcc;
+                            LogMessage($"步行加速度已恢复: {originalWalkAcc:F2}");
+                        }
+                    }
+
+                    if (disableMovementInertia && originalRunAcc > 0)
+                    {
+                        var runAccStat = main.CharacterItem.GetStat("RunAcc".GetHashCode());
+                        if (runAccStat != null)
+                        {
+                            runAccStat.BaseValue = originalRunAcc;
+                            LogMessage($"奔跑加速度已恢复: {originalRunAcc:F2}");
                         }
                     }
                 }

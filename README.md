@@ -20,14 +20,19 @@
 - 体力恢复率倍数调节 (1.0x-5.0x)
 - 体力恢复延迟倍数调节 (0x-5.0x)
 
+#### 移动手感参数
+- 惯性控制开关 (禁用/启用移动惯性效果)
+
 #### 使用方法
-1. **安装Mod**: 将DashPlus.dll放入游戏Mods文件夹
+1. **安装Mod**:
+   - 手动安装：将DashPlus.dll放入游戏Mods文件夹
+   - Steam创意工坊：直接订阅该MOD
 2. **启动游戏**: 运行游戏并加载存档
 3. **打开控制面板**: 按 `Ctrl+G` 打开GUI控制面板
 4. **调节参数**: 使用滑块实时调整各项参数
 5. **设置保存**: 所有设置自动保存，下次启动时生效
 
-> **建议**: 在ESC暂停时使用控制面板，以便安全调整参数
+> **建议**: 在ESC暂停时使用控制面板，以便调整参数
 
 #### 技术特性
 - ✅ 实时参数修改，无需重启游戏
@@ -36,6 +41,7 @@
 - ✅ 完整的中英文双语界面
 - ✅ 详细的调试日志输出
 - ✅ 安全的参数边界检查
+- ✅ 惯性控制系统（基于加速度调节实现）
 
 ---
 
@@ -55,14 +61,19 @@
 - Stamina Recover Rate Control (1.0x-5.0x)
 - Stamina Recover Delay Control (0x-5.0x)
 
+#### Movement Feel Parameters
+- Inertia Control Toggle (Disable/Enable movement inertia effects)
+
 #### Usage
-1. **Install Mod**: Place DashPlus.dll in the game Mods folder
+1. **Install Mod**:
+   - Manual Installation: Place DashPlus.dll in the game Mods folder
+   - Steam Workshop: Subscribe to the MOD directly
 2. **Launch Game**: Run the game and load your save
 3. **Open Control Panel**: Press `Ctrl+G` to open the GUI control panel
 4. **Adjust Parameters**: Use sliders to adjust parameters in real-time
 5. **Settings Save**: All settings are automatically saved and persist between sessions
 
-> **Recommended**: Use the control panel while paused (ESC) for safe parameter adjustment
+> **Recommended**: Use the control panel while paused (ESC) for parameter adjustment
 
 #### Technical Features
 - ✅ Real-time parameter modification without game restart
@@ -71,8 +82,10 @@
 - ✅ Complete bilingual (Chinese/English) interface
 - ✅ Detailed debug logging output
 - ✅ Safe parameter boundary checking
+- ✅ Inertia control system (implemented through acceleration adjustment)
 
 ---
 
 ### 许可证 / License
 本项目仅供学习和交流使用。/ This project is for learning and communication purposes only.
+https://github.com/Masaicker/DashPlusMod-Duckov
