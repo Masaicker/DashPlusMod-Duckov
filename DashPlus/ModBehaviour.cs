@@ -947,6 +947,9 @@ namespace DashPlus
             enableCustomFOV = false;
             fovMultiplier = 1.0f;
 
+            // 重置闪避换弹参数
+            enableDashReload = false;
+
             SaveSettings();
             ApplyModIfExists();
             LogMessage("所有参数已恢复默认设置");
