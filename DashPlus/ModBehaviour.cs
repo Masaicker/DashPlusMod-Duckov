@@ -880,9 +880,11 @@ namespace DashPlus
 
             GUILayout.Space(10);
 
-            // 操作提示
+            // 操作提示 - 根据自定义视野状态决定是否变灰
+            GUI.enabled = enableCustomFOV; // 启用状态与自定义视野开关一致
             GUILayout.Label("提示：可使用 Ctrl+鼠标滚轮 调整视野", GUI.skin.box);
             GUILayout.Label("Tip: Use Ctrl+Mouse Wheel to adjust FOV", GUI.skin.box);
+            GUI.enabled = true; // 恢复启用状态
         }
 
         void ResetAllParameters()
