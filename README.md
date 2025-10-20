@@ -29,6 +29,7 @@
 #### 视野设置参数
 - 自定义视野开关 (启用/禁用自定义FOV)
 - 视野倍数调节 (0.2x-3.0x)
+- 快捷调整：当自定义视野开启时，可使用 Ctrl+鼠标滚轮 进行平滑视野缩放
 
 #### 使用方法
 1. **安装Mod**:
@@ -79,6 +80,7 @@
 #### FOV Settings Parameters
 - Custom FOV Toggle (Enable/Disable custom field of view)
 - FOV Multiplier Adjustment (0.2x-3.0x)
+- Quick Adjustment: When custom FOV is enabled, use Ctrl+Mouse Wheel for smooth FOV scaling
 
 #### Usage
 1. **Install Mod**:

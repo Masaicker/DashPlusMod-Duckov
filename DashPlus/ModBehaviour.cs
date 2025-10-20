@@ -73,6 +73,18 @@ namespace DashPlus
         private int selectedTab = 0; // 0: 闪避, 1: 奔跑, 2: 视野, 3: 其他设置
         private readonly string[] tabNames = { "闪避 / Dash", "奔跑 / Run", "视野 / FOV", "其他 / Others" };
 
+        // FOV滚轮调整相关
+        private bool isScrollingFOV = false;
+        private float lastScrollTime = 0f;
+        private const float SCROLL_END_DELAY = 0.5f; // 滚轮停止后延迟保存时间
+
+        // FOV平滑过渡系统
+        private float currentFOVValue = 1.0f; // 当前实际应用的FOV值
+        private float targetFOVValue = 1.0f; // 目标FOV值
+        private float fovVelocity = 0f; // FOV变化速度（用于惯性效果）
+        private const float FOV_SMOOTH_TIME = 0.15f; // FOV平滑过渡时间
+        private bool needsFOVUpdate = false; // 是否需要更新FOV
+
         protected override void OnAfterSetup()
         {
             base.OnAfterSetup();
@@ -89,6 +101,56 @@ namespace DashPlus
             {
                 showGUI = !showGUI;
                 LogMessage($"GUI {(showGUI ? "显示" : "隐藏")}");
+            }
+
+            // 检查快捷键：Ctrl+滚轮调整FOV
+            if (Input.GetKey(KeyCode.LeftControl) && enableCustomFOV)
+            {
+                float scrollWheel = Input.GetAxis("Mouse ScrollWheel");
+                if (Mathf.Abs(scrollWheel) > 0.01f)
+                {
+                    // 开始滚动或继续滚动
+                    if (!isScrollingFOV)
+                    {
+                        isScrollingFOV = true;
+                        targetFOVValue = fovMultiplier;
+                    }
+
+                    lastScrollTime = Time.time;
+
+                    // 调整目标值（不是当前值）
+                    targetFOVValue = Mathf.Clamp(targetFOVValue - scrollWheel * 0.5f, 0.2f, 3.0f);
+                    needsFOVUpdate = true;
+
+                    // 同步更新设置值（用于UI显示和保存）
+                    fovMultiplier = targetFOVValue;
+                }
+            }
+
+            // 检查滚轮是否停止，如果停止则保存设置
+            if (isScrollingFOV && Time.time - lastScrollTime > SCROLL_END_DELAY)
+            {
+                isScrollingFOV = false;
+                SaveSettings();
+                LogMessage($"FOV倍数调整为: {targetFOVValue:F1}x");
+            }
+
+            // FOV平滑过渡系统 - 每帧都执行平滑更新
+            if (needsFOVUpdate)
+            {
+                // 使用SmoothDamp实现平滑过渡
+                currentFOVValue = Mathf.SmoothDamp(currentFOVValue, targetFOVValue, ref fovVelocity, FOV_SMOOTH_TIME);
+
+                // 当接近目标值时，停止更新
+                if (Mathf.Abs(currentFOVValue - targetFOVValue) < 0.001f)
+                {
+                    currentFOVValue = targetFOVValue;
+                    fovVelocity = 0f;
+                    needsFOVUpdate = false;
+                }
+
+                // 应用当前平滑后的FOV值
+                ApplySmoothFOV();
             }
         }
 
@@ -110,6 +172,10 @@ namespace DashPlus
                 originalSpeedCurve = main.dashAction.speedCurve;
                 originalStaminaCost = main.dashAction.staminaCost;
                 originalCoolTime = main.dashAction.coolTime;
+
+                // 初始化FOV平滑系统
+                currentFOVValue = fovMultiplier;
+                targetFOVValue = fovMultiplier;
 
                 // 保存所有CharacterItem相关参数的原始值 - 使用 GetStat 的 BaseValue 以保持一致性
                 if (main.CharacterItem != null)
@@ -389,6 +455,13 @@ namespace DashPlus
 
             if (enableCustomFOV)
             {
+                // 同步目标值
+                targetFOVValue = fovMultiplier;
+                if (!needsFOVUpdate)
+                {
+                    currentFOVValue = fovMultiplier;
+                }
+
                 // 应用视野倍数
                 float targetDefaultFOV = fovMultiplier == 1.0f ? originalDefaultFOV : originalDefaultFOV * fovMultiplier;
                 float targetAdsFOV = fovMultiplier == 1.0f ? originalAdsFOV : originalAdsFOV * fovMultiplier;
@@ -420,6 +493,19 @@ namespace DashPlus
                     LogMessage($"瞄准视野已恢复: {originalAdsFOV:F2}");
                 }
             }
+        }
+
+        void ApplySmoothFOV()
+        {
+            var gameCamera = GameCamera.Instance;
+            if (gameCamera == null || originalDefaultFOV <= 0 || !enableCustomFOV) return;
+
+            // 应用平滑后的视野倍数
+            float smoothDefaultFOV = currentFOVValue == 1.0f ? originalDefaultFOV : originalDefaultFOV * currentFOVValue;
+            float smoothAdsFOV = currentFOVValue == 1.0f ? originalAdsFOV : originalAdsFOV * currentFOVValue;
+
+            gameCamera.defaultFOV = smoothDefaultFOV;
+            gameCamera.adsFOV = smoothAdsFOV;
         }
 
         void LoadSettings()
@@ -791,6 +877,12 @@ namespace DashPlus
                 SaveSettings();
                 ApplyModIfExists();
             }
+
+            GUILayout.Space(10);
+
+            // 操作提示
+            GUILayout.Label("提示：可使用 Ctrl+鼠标滚轮 调整视野", GUI.skin.box);
+            GUILayout.Label("Tip: Use Ctrl+Mouse Wheel to adjust FOV", GUI.skin.box);
         }
 
         void ResetAllParameters()
