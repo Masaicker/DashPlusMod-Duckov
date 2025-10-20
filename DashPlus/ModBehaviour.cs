@@ -39,6 +39,10 @@ namespace DashPlus
         [Tooltip("启用自定义视野")]
         public bool enableCustomFOV = false;
 
+        [Header("闪避换弹设置")]
+        [Tooltip("允许闪避时自动换弹")]
+        public bool enableDashReload = false;
+
         [Header("调试设置")]
         [Tooltip("是否输出调试日志")] public bool enableLogging = false;
 
@@ -84,6 +88,13 @@ namespace DashPlus
         private float fovVelocity = 0f; // FOV变化速度（用于惯性效果）
         private const float FOV_SMOOTH_TIME = 0.15f; // FOV平滑过渡时间
         private bool needsFOVUpdate = false; // 是否需要更新FOV
+
+        // 闪避换弹系统
+        private bool wasDashing = false; // 上一帧是否在闪避
+        private bool dashReloadTriggered = false; // 本次闪避是否已触发换弹
+
+        // 换弹加速系统
+        private const float DASH_RELOAD_TIME = 0.1f; // 闪避时固定换弹时间0.1秒
 
         protected override void OnAfterSetup()
         {
@@ -151,6 +162,12 @@ namespace DashPlus
 
                 // 应用当前平滑后的FOV值
                 ApplySmoothFOV();
+            }
+
+            // 闪避自动换弹系统
+            if (enableDashReload)
+            {
+                HandleDashReload();
             }
         }
 
@@ -515,6 +532,9 @@ namespace DashPlus
             staminaCost = PlayerPrefs.GetFloat("DashPlus_Stamina", 10f);
             coolTime = PlayerPrefs.GetFloat("DashPlus_CoolTime", 0.5f);
 
+            // 闪避换弹设置
+            enableDashReload = PlayerPrefs.GetInt("DashPlus_DashReload", 0) == 1;
+
             // 奔跑参数
             walkSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_WalkSpeed", 1.0f);
             runSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_RunSpeed", 1.0f);
@@ -542,6 +562,9 @@ namespace DashPlus
             PlayerPrefs.SetFloat("DashPlus_DashDistance", dashDistanceMultiplier);
             PlayerPrefs.SetFloat("DashPlus_Stamina", staminaCost);
             PlayerPrefs.SetFloat("DashPlus_CoolTime", coolTime);
+
+            // 闪避换弹设置
+            PlayerPrefs.SetInt("DashPlus_DashReload", enableDashReload ? 1 : 0);
 
             // 奔跑参数
             PlayerPrefs.SetFloat("DashPlus_WalkSpeed", walkSpeedMultiplier);
@@ -713,6 +736,19 @@ namespace DashPlus
                 coolTime = newCoolTime;
                 SaveSettings();
                 ApplyModIfExists();
+            }
+
+            // 闪避换弹开关
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("闪避换弹 /Dash Reload:", GUILayout.Width(200));
+            bool newDashReload = GUILayout.Toggle(enableDashReload, enableDashReload ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            GUILayout.EndHorizontal();
+
+            if (newDashReload != enableDashReload)
+            {
+                enableDashReload = newDashReload;
+                SaveSettings();
+                LogMessage($"闪避换弹功能: {(enableDashReload ? "启用" : "禁用")}");
             }
         }
 
@@ -1042,6 +1078,134 @@ namespace DashPlus
             }
 
             base.OnBeforeDeactivate();
+        }
+
+        void HandleDashReload()
+        {
+            var main = CharacterMainControl.Main;
+            if (main == null || main.dashAction == null) return;
+
+            bool isDashing = main.dashAction.Running;
+
+            // 检测闪避开始
+            if (isDashing && !wasDashing)
+            {
+                dashReloadTriggered = false; // 重置本次闪避的换弹触发标志
+            }
+
+            // 闪避期间尝试换弹（但只尝试一次）
+            if (isDashing && !dashReloadTriggered)
+            {
+                if (TryReloadDuringDash())
+                {
+                    LogMessage("闪避换弹成功！");
+                }
+
+                // 无论成功失败都标记为已尝试，避免重复尝试
+                dashReloadTriggered = true;
+            }
+
+            // 闪避结束，重置状态
+            if (!isDashing && wasDashing)
+            {
+                dashReloadTriggered = false;
+            }
+
+            wasDashing = isDashing;
+        }
+
+        bool TryReloadDuringDash()
+        {
+            var main = CharacterMainControl.Main;
+            if (main == null) return false;
+
+            // 检查是否有装备枪械 - 使用 agentHolder.CurrentHoldGun 来检查
+            var gun = main.agentHolder?.CurrentHoldGun;
+            if (gun == null)
+            {
+                LogMessage("未装备枪械，无法换弹");
+                return false;
+            }
+
+            // 检查枪械状态是否允许换弹
+            // 使用反射获取 GunState 属性
+            var gunStateProperty = gun.GetType().GetProperty("GunState");
+            if (gunStateProperty == null)
+            {
+                LogMessage("无法获取枪械状态信息");
+                return false;
+            }
+
+            var gunState = gunStateProperty.GetValue(gun);
+            string stateName = gunState.ToString();
+
+            // 允许换弹的状态：ready, empty, shootCooling
+            if (stateName != "ready" && stateName != "empty" && stateName != "shootCooling")
+            {
+                LogMessage($"枪械状态不允许换弹: {stateName}");
+                return false;
+            }
+
+            // 检查是否已经在换弹
+            var isReloadingMethod = gun.GetType().GetMethod("IsReloading");
+            if (isReloadingMethod != null && (bool)isReloadingMethod.Invoke(gun, null))
+            {
+                LogMessage("已经在换弹中");
+                return false;
+            }
+
+            // ⭐ 直接调用底层换弹方法，绕过动作优先级系统！
+            var beginReloadMethod = gun.GetType().GetMethod("BeginReload");
+            if (beginReloadMethod == null)
+            {
+                LogMessage("无法获取BeginReload方法");
+                return false;
+            }
+
+            try
+            {
+                bool success = (bool)beginReloadMethod.Invoke(gun, null);
+                LogMessage($"闪避换弹调用结果: {success}");
+
+                // 如果换弹成功，立即加速换弹进度
+                if (success)
+                {
+                    AccelerateDashReload(gun);
+                }
+
+                return success;
+            }
+            catch (System.Exception ex)
+            {
+                LogMessage($"换弹调用异常: {ex.Message}");
+                return false;
+            }
+        }
+
+        void AccelerateDashReload(object gun)
+        {
+            try
+            {
+                // 获取换弹时间和状态计时器
+                var reloadTimeProperty = gun.GetType().GetProperty("ReloadTime");
+                var stateTimerField = gun.GetType().GetField("stateTimer",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                if (reloadTimeProperty == null || stateTimerField == null) return;
+
+                float reloadTime = (float)reloadTimeProperty.GetValue(gun);
+
+                // 将状态计时器直接设置为：总换弹时间 - 固定时间
+                // 这样只需要固定时间就能完成换弹
+                float acceleratedTime = reloadTime - DASH_RELOAD_TIME;
+                stateTimerField.SetValue(gun, acceleratedTime);
+
+                LogMessage($"闪避换弹: 固定时间 {DASH_RELOAD_TIME:F1}s，原时间 {reloadTime:F2}s");
+            }
+            catch (System.Exception ex)
+            {
+                LogMessage($"闪避换弹异常: {ex.Message}");
+            }
         }
 
         void LogMessage(string message)

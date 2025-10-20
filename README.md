@@ -12,6 +12,7 @@
 - 闪避距离倍数调节 (0.1x-5.0x)
 - 体力消耗设置 (0-50)
 - 冷却时间调整 (0-5秒)
+- 闪避换弹开关 (开启/禁用闪避时自动换弹)
 
 #### 奔跑参数
 - 步行速度倍数调节 (1.0x-5.0x)
@@ -52,6 +53,7 @@
 - ✅ 惯性控制系统（基于加速度调节实现）
 - ✅ 无限负重系统（通过修改MaxWeight属性实现）
 - ✅ 视野控制系统（通过修改FOV参数实现）
+- ✅ 闪避换弹系统（底层绕过动作系统，固定时间快速换弹）
 
 ---
 
@@ -63,6 +65,7 @@
 - Dash Distance Control (0.1x-5.0x)
 - Stamina Cost Settings (0-50)
 - Cooldown Time Adjustment (0-5 seconds)
+- Dash Reload Toggle (Enable/Disable auto-reload during dash)
 
 #### Run Parameters
 - Walk Speed Control (1.0x-5.0x)
@@ -103,9 +106,15 @@
 - ✅ Inertia control system (implemented through acceleration adjustment)
 - ✅ Infinite weight system (implemented by modifying MaxWeight property)
 - ✅ FOV control system (modifies FOV parameters)
+- ✅ Dash reload system (bypasses action system for instant fixed-time reload)
 
 ---
 
 ### 许可证 / License
 本项目仅供学习和交流使用。/ This project is for learning and communication purposes only.
-https://github.com/Masaicker/DashPlusMod-Duckov
+
+## 支持一下｜Support
+如果你觉得这个项目对你有帮助，欢迎在 Ko-fi 给我买杯咖啡 ☕  
+If you found this project useful, you’re welcome to buy me a coffee on Ko-fi ☕
+
+[![Buy me a coffee](https://cdn.prod.website-files.com/5c14e387dab576fe667689cf/670f5a0171bfb928b21a7e00_support_me_on_kofi_beige.png)](https://ko-fi.com/masaicker)
