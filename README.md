@@ -13,6 +13,7 @@
 - 体力消耗设置 (0-50)
 - 冷却时间调整 (0-5秒)
 - 闪避换弹开关 (开启/禁用闪避时自动换弹)
+- 射击打断换弹 (换弹时按开火键可中断换弹)
 
 #### 奔跑参数
 - 步行速度倍数调节 (1.0x-5.0x)
@@ -66,6 +67,7 @@
 - Stamina Cost Settings (0-50)
 - Cooldown Time Adjustment (0-5 seconds)
 - Dash Reload Toggle (Enable/Disable auto-reload during dash)
+- Shoot Interrupt Reload (Press fire key during reload to interrupt)
 
 #### Run Parameters
 - Walk Speed Control (1.0x-5.0x)

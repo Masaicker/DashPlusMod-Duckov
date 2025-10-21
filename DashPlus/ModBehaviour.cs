@@ -44,6 +44,10 @@ namespace DashPlus
         [Tooltip("允许闪避时自动换弹")]
         public bool enableDashReload = false;
 
+        [Header("射击打断换弹设置")]
+        [Tooltip("允许射击键打断换弹")]
+        public bool enableShootInterruptReload = false;
+
         [Header("调试设置")]
         [Tooltip("是否输出调试日志")] public bool enableLogging = false;
 
@@ -99,6 +103,13 @@ namespace DashPlus
         private float dashStartTime = 0f; // 闪避开始时间
         private float originalReloadTime = 0f; // 武器原始换弹时间
         private int dashReloadPercentage = 0; // 闪避换弹百分比 (0-100)
+
+        // 射击打断换弹优化
+        private bool isCurrentlyReloading = false; // 是否当前在换弹状态
+        private bool reloadInterruptChecked = false; // 本次换弹是否已经检查过打断
+        private bool isEmptyClipAutoReload = false; // 是否是空弹夹自动换弹
+        private float reloadStartTime = 0f; // 换弹开始时间
+        private object? cachedInputManager; // 缓存的inputManager对象
 
         protected override void OnAfterSetup()
         {
@@ -173,10 +184,18 @@ namespace DashPlus
             {
                 HandleDashReload();
             }
+
+            // 射击打断换弹系统
+            if (enableShootInterruptReload)
+            {
+                HandleShootInterruptReload();
+            }
         }
 
         void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            //切换场景后InputManager会变化，cachedInputManager就会失效
+            cachedInputManager = null;
             LogMessage($"场景切换: {scene.name}");
             ApplyModIfExists();
         }
@@ -539,6 +558,7 @@ namespace DashPlus
             // 闪避换弹设置
             enableDashReload = PlayerPrefs.GetInt("DashPlus_DashReload", 0) == 1;
             dashReloadPercentage = PlayerPrefs.GetInt("DashPlus_DashReloadPercentage", 0);
+            enableShootInterruptReload = PlayerPrefs.GetInt("DashPlus_ShootInterruptReload", 0) == 1;
 
             // 奔跑参数
             walkSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_WalkSpeed", 1.0f);
@@ -571,6 +591,7 @@ namespace DashPlus
             // 闪避换弹设置
             PlayerPrefs.SetInt("DashPlus_DashReload", enableDashReload ? 1 : 0);
             PlayerPrefs.SetInt("DashPlus_DashReloadPercentage", dashReloadPercentage);
+            PlayerPrefs.SetInt("DashPlus_ShootInterruptReload", enableShootInterruptReload ? 1 : 0);
 
             // 奔跑参数
             PlayerPrefs.SetFloat("DashPlus_WalkSpeed", walkSpeedMultiplier);
@@ -776,6 +797,19 @@ namespace DashPlus
                 SaveSettings();
                 LogMessage($"闪避换弹加速: {dashReloadPercentage}%");
             }
+
+            // 射击打断换弹开关
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("射击打断换弹 /Shoot Interrupt:", GUILayout.Width(180));
+            bool newShootInterrupt = GUILayout.Toggle(enableShootInterruptReload, enableShootInterruptReload ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            GUILayout.EndHorizontal();
+
+            if (newShootInterrupt != enableShootInterruptReload)
+            {
+                enableShootInterruptReload = newShootInterrupt;
+                SaveSettings();
+                LogMessage($"射击打断换弹功能: {(enableShootInterruptReload ? "启用" : "禁用")}");
+            }
         }
 
         void DrawRunTab()
@@ -976,6 +1010,7 @@ namespace DashPlus
             // 重置闪避换弹参数
             enableDashReload = false;
             dashReloadPercentage = 0;
+            enableShootInterruptReload = false;
 
             SaveSettings();
             ApplyModIfExists();
@@ -1169,7 +1204,7 @@ namespace DashPlus
                     LogMessage($"保存武器换弹时间: {originalReloadTime:F2}s");
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 LogMessage($"保存换弹时间异常: {ex.Message}");
             }
@@ -1225,36 +1260,26 @@ namespace DashPlus
 
             try
             {
-                float elapsedTime = Time.time - dashStartTime;
-                float remainingTime = originalReloadTime - elapsedTime;
-                // 确保最小换弹时间为0秒
-                remainingTime = Mathf.Max(remainingTime, 0);
-
-                LogMessage($"时间累积换弹: 已流逝 {elapsedTime:F2}s，剩余 {remainingTime:F2}s");
-
-
                 // 使用动作系统启动换弹，确保可中断性
                 if (main.reloadAction != null && main.reloadAction.IsReady())
                 {
                     // 启动换弹动作
                     main.StartAction(main.reloadAction);
-                    LogMessage($"时间累积换弹启动成功，需要 {remainingTime:F2}s完成");
-
                     // 在下一帧应用时间加速（确保动作系统已正确初始化）
-                    StartCoroutine(ApplyTimeAccumulatedReductionDelayed(gun, remainingTime));
+                    StartCoroutine(ApplyTimeAccumulatedReductionDelayed(gun));
                 }
                 else
                 {
                     LogMessage("换弹动作未准备好，无法执行时间累积换弹");
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 LogMessage($"时间累积换弹异常: {ex.Message}");
             }
         }
 
-        void ApplyTimeAccumulatedReduction(object gun, float remainingTime)
+        void ApplyTimeAccumulatedReduction(object gun)
         {
             try
             {
@@ -1265,7 +1290,7 @@ namespace DashPlus
 
                 if (reloadTimeProperty == null || stateTimerField == null) return;
 
-                float reloadTime = (float)reloadTimeProperty.GetValue(gun);
+                float reloadTime = originalReloadTime;
 
                 // 使用百分比计算最终的加速时间
                 // 0% = 原始累积时间 (elapsedTime), 100% = 完全跳过时间 (reloadTime)
@@ -1276,19 +1301,166 @@ namespace DashPlus
 
                 LogMessage($"时间累积换弹加速: 跳到 {acceleratedTime:F2}s，加速 {dashReloadPercentage}%，原始累积 {elapsedTime:F2}s");
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 LogMessage($"时间累积换弹加速异常: {ex.Message}");
             }
         }
 
-        System.Collections.IEnumerator ApplyTimeAccumulatedReductionDelayed(object gun, float remainingTime)
+        System.Collections.IEnumerator ApplyTimeAccumulatedReductionDelayed(object gun)
         {
             // 等待一帧，确保动作系统已正确初始化换弹状态
             yield return null;
 
             // 现在安全地应用时间加速
-            ApplyTimeAccumulatedReduction(gun, remainingTime);
+            ApplyTimeAccumulatedReduction(gun);
+        }
+
+        // 射击打断换弹处理（优化版本）
+        void HandleShootInterruptReload()
+        {
+            try
+            {
+                var main = CharacterMainControl.Main;
+                if (main == null || main.agentHolder?.CurrentHoldGun == null) return;
+
+                var gun = main.agentHolder.CurrentHoldGun;
+
+                // 检查是否在换弹状态
+                var isReloadingMethod = gun.GetType().GetMethod("IsReloading");
+                if (isReloadingMethod == null) return;
+
+                bool isReloading = (bool)isReloadingMethod.Invoke(gun, null);
+
+                // 检测换弹状态变化
+                if (isReloading && !isCurrentlyReloading)
+                {
+                    // 开始换弹，重置检查标志
+                    isCurrentlyReloading = true;
+                    reloadStartTime = Time.time; // 记录换弹开始时间
+                    reloadInterruptChecked = false;
+                    isEmptyClipAutoReload = false; // 重置空弹夹标志
+                    LogMessage("开始换弹，准备检测打断");
+                }
+                else if (!isReloading && isCurrentlyReloading)
+                {
+                    // 换弹结束，清理状态
+                    isCurrentlyReloading = false;
+                    reloadStartTime = 0f;
+                    reloadInterruptChecked = false;
+                    isEmptyClipAutoReload = false;
+                    LogMessage("换弹结束");
+                    return;
+                }
+
+                // 如果不在换弹状态，直接返回
+                if (!isCurrentlyReloading) return;
+
+                // 如果已经检查过本次换弹，直接返回
+                if (reloadInterruptChecked) return;
+
+                // 检查弹夹是否有子弹，标记是否为空弹夹自动换弹
+                if (!isEmptyClipAutoReload && !reloadInterruptChecked)
+                {
+                    var bulletCountProperty = gun.GetType().GetProperty("BulletCount");
+                    if (bulletCountProperty != null)
+                    {
+                        int bulletCount = (int)bulletCountProperty.GetValue(gun);
+                        if (bulletCount <= 0)
+                        {
+                            // 标记这是空弹夹自动换弹，但不跳过打断检查
+                            isEmptyClipAutoReload = true;
+                            LogMessage("检测到空弹夹自动换弹");
+                        }
+                    }
+                }
+
+                // 如果是空弹夹自动换弹，延迟一小段时间再检查打断
+                // 这样可以避免立即打断原版的自动换弹
+                if (isEmptyClipAutoReload)
+                {
+                    float timeSinceReload = Time.time - reloadStartTime;
+                    const float MIN_INTERRUPT_DELAY = 0.1f; // 最小延迟100ms
+
+                    if (timeSinceReload < MIN_INTERRUPT_DELAY)
+                    {
+                        // 延迟期间不检查打断，让原版自动换弹有时间启动
+                        return;
+                    }
+                }
+
+                // 检查是否有开火输入
+                bool hasFireInput = HasFireInputFromInputManagerOptimized();
+                if (hasFireInput)
+                {
+                    CallOriginalStopActionOptimized(main);
+                    LogMessage("射击键打断换弹成功");
+                    reloadInterruptChecked = true; // 标记已检查过，避免重复检查
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"射击打断换弹异常: {ex.Message}");
+            }
+        }
+
+        // 从InputManager检查开火输入（优化版本）
+        bool HasFireInputFromInputManagerOptimized()
+        {
+            try
+            {
+                // 如果还没有缓存inputManager，先获取并缓存
+                if (cachedInputManager == null)
+                {
+                    var characterInputControlType = Type.GetType("CharacterInputControl, TeamSoda.Duckov.Core");
+                    if (characterInputControlType == null) return false;
+
+                    var instanceProperty = characterInputControlType.GetProperty("Instance");
+                    var characterInputControl = instanceProperty?.GetValue(null);
+                    if (characterInputControl == null) return false;
+
+                    var inputManagerField = characterInputControlType.GetField("inputManager",
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    cachedInputManager = inputManagerField?.GetValue(characterInputControl);
+                }
+
+                if (cachedInputManager == null) return false;
+
+                // 获取triggerInput状态（是私有字段，不是属性）
+                var triggerInputField = cachedInputManager.GetType().GetField("triggerInput",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (triggerInputField == null) return false;
+
+                bool triggerInput = (bool)triggerInputField.GetValue(cachedInputManager);
+                return triggerInput;
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"检查开火输入异常: {ex.Message}");
+                return false;
+            }
+        }
+
+        // 调用原版的StopAction（优化版本）
+        void CallOriginalStopActionOptimized(CharacterMainControl main)
+        {
+            try
+            {
+                // 使用缓存的inputManager
+                if (cachedInputManager != null)
+                {
+                    var stopActionMethod = cachedInputManager.GetType().GetMethod("StopAction");
+                    if (stopActionMethod != null)
+                    {
+                        stopActionMethod.Invoke(cachedInputManager, null);
+                        LogMessage("StopAction调用成功（优化版本）");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"调用StopAction异常: {ex.Message}");
+            }
         }
 
         void LogMessage(string message)
