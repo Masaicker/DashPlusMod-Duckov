@@ -1495,7 +1495,8 @@ namespace DashPlus
                     float timeSinceReload = Time.time - reloadStartTime;
                     if (timeSinceReload < MIN_INTERRUPT_DELAY)
                     {
-                        // 延迟期间不检查打断，让原版自动换弹有时间启动
+                        // 延迟期间需要更新lastFireInputState来避免误判
+                        lastFireInputState = HasFireInputFromInputManagerOptimized();
                         return;
                     }
                 }
