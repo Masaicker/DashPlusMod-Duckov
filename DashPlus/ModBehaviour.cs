@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System;
 
 namespace DashPlus
 {
@@ -93,8 +94,11 @@ namespace DashPlus
         private bool wasDashing = false; // 上一帧是否在闪避
         private bool dashReloadTriggered = false; // 本次闪避是否已触发换弹
 
-        // 换弹加速系统
-        private const float DASH_RELOAD_TIME = 0.1f; // 闪避时固定换弹时间0.1秒
+        // 时间累积换弹系统
+        private bool dashReloadIntent = false; // 闪避期间是否有换弹意图
+        private float dashStartTime = 0f; // 闪避开始时间
+        private float originalReloadTime = 0f; // 武器原始换弹时间
+        private int dashReloadPercentage = 0; // 闪避换弹百分比 (0-100)
 
         protected override void OnAfterSetup()
         {
@@ -534,6 +538,7 @@ namespace DashPlus
 
             // 闪避换弹设置
             enableDashReload = PlayerPrefs.GetInt("DashPlus_DashReload", 0) == 1;
+            dashReloadPercentage = PlayerPrefs.GetInt("DashPlus_DashReloadPercentage", 0);
 
             // 奔跑参数
             walkSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_WalkSpeed", 1.0f);
@@ -565,6 +570,7 @@ namespace DashPlus
 
             // 闪避换弹设置
             PlayerPrefs.SetInt("DashPlus_DashReload", enableDashReload ? 1 : 0);
+            PlayerPrefs.SetInt("DashPlus_DashReloadPercentage", dashReloadPercentage);
 
             // 奔跑参数
             PlayerPrefs.SetFloat("DashPlus_WalkSpeed", walkSpeedMultiplier);
@@ -740,7 +746,7 @@ namespace DashPlus
 
             // 闪避换弹开关
             GUILayout.BeginHorizontal();
-            GUILayout.Label("闪避换弹 /Dash Reload:", GUILayout.Width(200));
+            GUILayout.Label("闪避换弹 /Dash Reload:", GUILayout.Width(180));
             bool newDashReload = GUILayout.Toggle(enableDashReload, enableDashReload ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
@@ -749,6 +755,26 @@ namespace DashPlus
                 enableDashReload = newDashReload;
                 SaveSettings();
                 LogMessage($"闪避换弹功能: {(enableDashReload ? "启用" : "禁用")}");
+            }
+
+            // 换弹加速百分比滑动条
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("换弹加速 /Reload Speed:", GUILayout.Width(180));
+
+            // 根据闪避换弹开关状态设置GUI是否可用
+            GUI.enabled = enableDashReload;
+
+            float newPercentage = GUILayout.HorizontalSlider(dashReloadPercentage, 0f, 100f, GUILayout.Width(200));
+            GUILayout.Label($"{dashReloadPercentage}%", GUILayout.Width(50));
+            GUI.enabled = true; // 恢复GUI状态
+
+            GUILayout.EndHorizontal();
+
+            if (Math.Abs(newPercentage - dashReloadPercentage) > 0.5f)
+            {
+                dashReloadPercentage = (int)newPercentage;
+                SaveSettings();
+                LogMessage($"闪避换弹加速: {dashReloadPercentage}%");
             }
         }
 
@@ -949,6 +975,7 @@ namespace DashPlus
 
             // 重置闪避换弹参数
             enableDashReload = false;
+            dashReloadPercentage = 0;
 
             SaveSettings();
             ApplyModIfExists();
@@ -1094,30 +1121,61 @@ namespace DashPlus
             if (isDashing && !wasDashing)
             {
                 dashReloadTriggered = false; // 重置本次闪避的换弹触发标志
+                dashReloadIntent = false; // 重置换弹意图
+                dashStartTime = Time.time; // 记录闪避开始时间
+                SaveWeaponReloadTime(main); // 保存武器换弹时间
             }
 
-            // 闪避期间尝试换弹（但只尝试一次）
+            // 闪避期间尝试换弹（但只记录意图，不执行）
             if (isDashing && !dashReloadTriggered)
             {
-                if (TryReloadDuringDash())
+                if (CanReloadDuringDash())
                 {
-                    LogMessage("闪避换弹成功！");
+                    dashReloadIntent = true; // 记录换弹意图
+                    LogMessage("闪避期间记录换弹意图");
                 }
-
-                // 无论成功失败都标记为已尝试，避免重复尝试
+                else
+                {
+                    LogMessage("闪避期间无法换弹");
+                }
                 dashReloadTriggered = true;
             }
 
-            // 闪避结束，重置状态
+            // 闪避结束，执行时间累积换弹
             if (!isDashing && wasDashing)
             {
                 dashReloadTriggered = false;
+                if (dashReloadIntent)
+                {
+                    ExecuteAccumulatedReload(main);
+                }
+                dashReloadIntent = false; // 重置意图
             }
 
             wasDashing = isDashing;
         }
 
-        bool TryReloadDuringDash()
+        void SaveWeaponReloadTime(CharacterMainControl main)
+        {
+            var gun = main.agentHolder?.CurrentHoldGun;
+            if (gun == null) return;
+
+            try
+            {
+                var reloadTimeProperty = gun.GetType().GetProperty("ReloadTime");
+                if (reloadTimeProperty != null)
+                {
+                    originalReloadTime = (float)reloadTimeProperty.GetValue(gun);
+                    LogMessage($"保存武器换弹时间: {originalReloadTime:F2}s");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                LogMessage($"保存换弹时间异常: {ex.Message}");
+            }
+        }
+
+        bool CanReloadDuringDash()
         {
             var main = CharacterMainControl.Main;
             if (main == null) return false;
@@ -1157,35 +1215,46 @@ namespace DashPlus
                 return false;
             }
 
-            // ⭐ 直接调用底层换弹方法，绕过动作优先级系统！
-            var beginReloadMethod = gun.GetType().GetMethod("BeginReload");
-            if (beginReloadMethod == null)
-            {
-                LogMessage("无法获取BeginReload方法");
-                return false;
-            }
+            return true;
+        }
+
+        void ExecuteAccumulatedReload(CharacterMainControl main)
+        {
+            var gun = main.agentHolder?.CurrentHoldGun;
+            if (gun == null) return;
 
             try
             {
-                bool success = (bool)beginReloadMethod.Invoke(gun, null);
-                LogMessage($"闪避换弹调用结果: {success}");
+                float elapsedTime = Time.time - dashStartTime;
+                float remainingTime = originalReloadTime - elapsedTime;
+                // 确保最小换弹时间为0秒
+                remainingTime = Mathf.Max(remainingTime, 0);
 
-                // 如果换弹成功，立即加速换弹进度
-                if (success)
+                LogMessage($"时间累积换弹: 已流逝 {elapsedTime:F2}s，剩余 {remainingTime:F2}s");
+
+
+                // 使用动作系统启动换弹，确保可中断性
+                if (main.reloadAction != null && main.reloadAction.IsReady())
                 {
-                    AccelerateDashReload(gun);
-                }
+                    // 启动换弹动作
+                    main.StartAction(main.reloadAction);
+                    LogMessage($"时间累积换弹启动成功，需要 {remainingTime:F2}s完成");
 
-                return success;
+                    // 在下一帧应用时间加速（确保动作系统已正确初始化）
+                    StartCoroutine(ApplyTimeAccumulatedReductionDelayed(gun, remainingTime));
+                }
+                else
+                {
+                    LogMessage("换弹动作未准备好，无法执行时间累积换弹");
+                }
             }
             catch (System.Exception ex)
             {
-                LogMessage($"换弹调用异常: {ex.Message}");
-                return false;
+                LogMessage($"时间累积换弹异常: {ex.Message}");
             }
         }
 
-        void AccelerateDashReload(object gun)
+        void ApplyTimeAccumulatedReduction(object gun, float remainingTime)
         {
             try
             {
@@ -1198,17 +1267,28 @@ namespace DashPlus
 
                 float reloadTime = (float)reloadTimeProperty.GetValue(gun);
 
-                // 将状态计时器直接设置为：总换弹时间 - 固定时间
-                // 这样只需要固定时间就能完成换弹
-                float acceleratedTime = reloadTime - DASH_RELOAD_TIME;
+                // 使用百分比计算最终的加速时间
+                // 0% = 原始累积时间 (elapsedTime), 100% = 完全跳过时间 (reloadTime)
+                float elapsedTime = Time.time - dashStartTime;
+                float acceleratedTime = elapsedTime + (reloadTime - elapsedTime) * (dashReloadPercentage / 100f);
+
                 stateTimerField.SetValue(gun, acceleratedTime);
 
-                LogMessage($"闪避换弹: 固定时间 {DASH_RELOAD_TIME:F1}s，原时间 {reloadTime:F2}s");
+                LogMessage($"时间累积换弹加速: 跳到 {acceleratedTime:F2}s，加速 {dashReloadPercentage}%，原始累积 {elapsedTime:F2}s");
             }
             catch (System.Exception ex)
             {
-                LogMessage($"闪避换弹异常: {ex.Message}");
+                LogMessage($"时间累积换弹加速异常: {ex.Message}");
             }
+        }
+
+        System.Collections.IEnumerator ApplyTimeAccumulatedReductionDelayed(object gun, float remainingTime)
+        {
+            // 等待一帧，确保动作系统已正确初始化换弹状态
+            yield return null;
+
+            // 现在安全地应用时间加速
+            ApplyTimeAccumulatedReduction(gun, remainingTime);
         }
 
         void LogMessage(string message)
