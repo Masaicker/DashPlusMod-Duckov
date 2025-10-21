@@ -109,7 +109,9 @@ namespace DashPlus
         private bool reloadInterruptChecked = false; // 本次换弹是否已经检查过打断
         private bool isEmptyClipAutoReload = false; // 是否是空弹夹自动换弹
         private float reloadStartTime = 0f; // 换弹开始时间
+        private bool lastFireInputState = false; // 上一帧的开火输入状态
         private object? cachedInputManager; // 缓存的inputManager对象
+        private const float MIN_INTERRUPT_DELAY = 0.1f; // 最小延迟100ms
 
         protected override void OnAfterSetup()
         {
@@ -767,7 +769,7 @@ namespace DashPlus
 
             // 闪避换弹开关
             GUILayout.BeginHorizontal();
-            GUILayout.Label("闪避换弹 /Dash Reload:", GUILayout.Width(180));
+            GUILayout.Label("闪避换弹 / Dash Reload:", GUILayout.Width(180));
             bool newDashReload = GUILayout.Toggle(enableDashReload, enableDashReload ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
@@ -780,7 +782,7 @@ namespace DashPlus
 
             // 换弹加速百分比滑动条
             GUILayout.BeginHorizontal();
-            GUILayout.Label("换弹加速 /Reload Speed:", GUILayout.Width(180));
+            GUILayout.Label("换弹加速 / Reload Speed:", GUILayout.Width(180));
 
             // 根据闪避换弹开关状态设置GUI是否可用
             GUI.enabled = enableDashReload;
@@ -798,9 +800,13 @@ namespace DashPlus
                 LogMessage($"闪避换弹加速: {dashReloadPercentage}%");
             }
 
-            // 射击打断换弹开关
+            GUILayout.Space(10);
+            GUILayout.Label("=== 其他参数 / Other Parameters ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            // 射击打断换弹开关 UI上使用“开火”，代码内部使用“射击”
             GUILayout.BeginHorizontal();
-            GUILayout.Label("射击打断换弹 /Shoot Interrupt:", GUILayout.Width(180));
+            GUILayout.Label("开火打断换弹 / Shoot Interrupt:", GUILayout.Width(180));
             bool newShootInterrupt = GUILayout.Toggle(enableShootInterruptReload, enableShootInterruptReload ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
@@ -1380,8 +1386,6 @@ namespace DashPlus
                 if (isEmptyClipAutoReload)
                 {
                     float timeSinceReload = Time.time - reloadStartTime;
-                    const float MIN_INTERRUPT_DELAY = 0.1f; // 最小延迟100ms
-
                     if (timeSinceReload < MIN_INTERRUPT_DELAY)
                     {
                         // 延迟期间不检查打断，让原版自动换弹有时间启动
@@ -1390,8 +1394,13 @@ namespace DashPlus
                 }
 
                 // 检查是否有开火输入
-                bool hasFireInput = HasFireInputFromInputManagerOptimized();
-                if (hasFireInput)
+                bool currentFireInput = HasFireInputFromInputManagerOptimized();
+
+                // 检测新的开火输入（从false变为true），而不是持续按着
+                bool hasNewFireInput = currentFireInput && !lastFireInputState;
+                lastFireInputState = currentFireInput; // 更新状态
+
+                if (hasNewFireInput)
                 {
                     CallOriginalStopActionOptimized(main);
                     LogMessage("射击键打断换弹成功");
