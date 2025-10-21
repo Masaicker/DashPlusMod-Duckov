@@ -48,6 +48,14 @@ namespace DashPlus
         [Tooltip("允许射击键打断换弹")]
         public bool enableShootInterruptReload = false;
 
+        [Header("击杀回血设置")]
+        [Tooltip("启用击杀回血功能")]
+        public bool enableKillHeal = false;
+        [Tooltip("回血比例(基于敌人最大血量的百分比)")]
+        public float healPercentage = 5.0f;
+        [Tooltip("最大回血量上限")]
+        public float maxHealAmount = 50.0f;
+
         [Header("调试设置")]
         [Tooltip("是否输出调试日志")] public bool enableLogging = false;
 
@@ -79,8 +87,8 @@ namespace DashPlus
         private Rect guiRect = new Rect(Screen.width / 2 - 250, Screen.height / 2 - 200, 500, 400);
 
         // 标签页控制
-        private int selectedTab = 0; // 0: 闪避, 1: 奔跑, 2: 视野, 3: 其他设置
-        private readonly string[] tabNames = { "闪避 / Dash", "奔跑 / Run", "视野 / FOV", "其他 / Others" };
+        private int selectedTab = 0; // 0: 闪避, 1: 奔跑, 2: 视野, 3: 回血, 4: 其他设置
+        private readonly string[] tabNames = { "闪避 / Dash", "奔跑 / Run", "视野 / FOV", "回血 / Heal", "其他 / Others" };
 
         // FOV滚轮调整相关
         private bool isScrollingFOV = false;
@@ -117,6 +125,9 @@ namespace DashPlus
         {
             base.OnAfterSetup();
             SceneManager.sceneLoaded += OnSceneLoaded;
+
+            // 订阅击杀事件
+            Health.OnDead += OnEnemyKilled;
 
             LoadSettings();
             Invoke(nameof(ApplyModIfExists), 1f);
@@ -562,6 +573,11 @@ namespace DashPlus
             dashReloadPercentage = PlayerPrefs.GetInt("DashPlus_DashReloadPercentage", 0);
             enableShootInterruptReload = PlayerPrefs.GetInt("DashPlus_ShootInterruptReload", 0) == 1;
 
+            // 击杀回血设置
+            enableKillHeal = PlayerPrefs.GetInt("DashPlus_KillHeal", 0) == 1;
+            healPercentage = PlayerPrefs.GetFloat("DashPlus_HealPercentage", 5.0f);
+            maxHealAmount = PlayerPrefs.GetFloat("DashPlus_MaxHealAmount", 50.0f);
+
             // 奔跑参数
             walkSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_WalkSpeed", 1.0f);
             runSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_RunSpeed", 1.0f);
@@ -580,7 +596,15 @@ namespace DashPlus
             fovMultiplier = PlayerPrefs.GetFloat("DashPlus_FOV", 1.0f);
 
             enableLogging = PlayerPrefs.GetInt("DashPlus_Logging", 0) == 1;
-            LogMessage($"设置已加载: 闪避(距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s), 奔跑(步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x), 惯性(禁用={disableMovementInertia}), 负重(无限={enableInfiniteWeight}), 视野(自定义={enableCustomFOV}, 倍数={fovMultiplier:F1}x), 日志={enableLogging}");
+            LogMessage($"设置已加载:\n" +
+                      $"  闪避: 距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s\n" +
+                      $"  奔跑: 步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x\n" +
+                      $"  惯性: 禁用={disableMovementInertia}\n" +
+                      $"  负重: 无限={enableInfiniteWeight}\n" +
+                      $"  视野: 自定义={enableCustomFOV}, 倍数={fovMultiplier:F1}x\n" +
+                      $"  回血: 启用={enableKillHeal}, 比例={healPercentage:F1}%, 最大={maxHealAmount:F1}\n" +
+                      $"  换弹: 闪避换弹={enableDashReload}({dashReloadPercentage}%), 射击打断={enableShootInterruptReload}\n" +
+                      $"  调试: 日志={enableLogging}");
         }
 
         void SaveSettings()
@@ -594,6 +618,11 @@ namespace DashPlus
             PlayerPrefs.SetInt("DashPlus_DashReload", enableDashReload ? 1 : 0);
             PlayerPrefs.SetInt("DashPlus_DashReloadPercentage", dashReloadPercentage);
             PlayerPrefs.SetInt("DashPlus_ShootInterruptReload", enableShootInterruptReload ? 1 : 0);
+
+            // 击杀回血设置
+            PlayerPrefs.SetInt("DashPlus_KillHeal", enableKillHeal ? 1 : 0);
+            PlayerPrefs.SetFloat("DashPlus_HealPercentage", healPercentage);
+            PlayerPrefs.SetFloat("DashPlus_MaxHealAmount", maxHealAmount);
 
             // 奔跑参数
             PlayerPrefs.SetFloat("DashPlus_WalkSpeed", walkSpeedMultiplier);
@@ -679,7 +708,10 @@ namespace DashPlus
                 case 2: // 视野设置
                     DrawFOVTab();
                     break;
-                case 3: // 其他设置
+                case 3: // 回血设置
+                    DrawHealTab();
+                    break;
+                case 4: // 其他设置
                     DrawSettingsTab();
                     break;
             }
@@ -989,6 +1021,73 @@ namespace DashPlus
             GUI.enabled = true; // 恢复启用状态
         }
 
+        void DrawHealTab()
+        {
+            GUILayout.Label("=== 击杀回血设置 / Kill Heal Settings ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            // 击杀回血开关
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("启用击杀回血 / Enable Kill Heal:", GUILayout.Width(200));
+            bool newKillHeal = GUILayout.Toggle(enableKillHeal, enableKillHeal ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            GUILayout.EndHorizontal();
+
+            if (newKillHeal != enableKillHeal)
+            {
+                enableKillHeal = newKillHeal;
+                SaveSettings();
+                LogMessage($"击杀回血功能: {(enableKillHeal ? "启用" : "禁用")}");
+            }
+
+            GUILayout.Space(10);
+
+            // 回血比例滑块 - 仅在启用击杀回血时可用
+            GUI.enabled = enableKillHeal;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("回血比例 / Heal Percentage:", GUILayout.Width(200));
+            float newHealPercentage = GUILayout.HorizontalSlider(healPercentage, 0.1f, 100.0f, GUILayout.Width(200));
+            GUILayout.Label($"{healPercentage:F1}%", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (Math.Abs(newHealPercentage - healPercentage) > 0.1f)
+            {
+                healPercentage = newHealPercentage;
+                SaveSettings();
+                LogMessage($"回血比例调整为: {healPercentage:F1}%");
+            }
+
+            // 最大回血量滑块
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("最大回血量 / Max Heal Amount:", GUILayout.Width(200));
+            float newMaxHeal = GUILayout.HorizontalSlider(maxHealAmount, 1f, 200f, GUILayout.Width(200));
+            GUILayout.Label($"{maxHealAmount:F1}", GUILayout.Width(50));
+            GUILayout.EndHorizontal();
+
+            if (Math.Abs(newMaxHeal - maxHealAmount) > 0.5f)
+            {
+                maxHealAmount = newMaxHeal;
+                SaveSettings();
+                LogMessage($"最大回血量调整为: {maxHealAmount:F1}");
+            }
+
+            GUI.enabled = true; // 恢复启用状态
+
+            GUILayout.Space(10);
+
+            // 说明文字
+            GUILayout.Label("--- 功能说明 / Description ---", GUI.skin.box);
+            GUILayout.Space(5);
+
+            GUI.enabled = enableKillHeal;
+            GUILayout.Label("• 击杀敌人时回复血量", GUI.skin.box);
+            GUILayout.Label("• 回血量 = 敌人最大血量 × 设定比例", GUI.skin.box);
+            GUILayout.Label("• 受最大回血量限制", GUI.skin.box);
+            GUILayout.Label("• Heal health when killing enemies", GUI.skin.box);
+            GUILayout.Label("• Heal amount = enemy max health × percentage", GUI.skin.box);
+            GUILayout.Label("• Limited by max heal amount", GUI.skin.box);
+            GUI.enabled = true;
+        }
+
         void ResetAllParameters()
         {
             // 重置闪避参数
@@ -1018,6 +1117,11 @@ namespace DashPlus
             dashReloadPercentage = 0;
             enableShootInterruptReload = false;
 
+            // 重置击杀回血参数
+            enableKillHeal = false;
+            healPercentage = 5.0f;
+            maxHealAmount = 50.0f;
+
             SaveSettings();
             ApplyModIfExists();
             LogMessage("所有参数已恢复默认设置");
@@ -1026,6 +1130,9 @@ namespace DashPlus
         protected override void OnBeforeDeactivate()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
+
+            // 取消订阅击杀事件
+            Health.OnDead -= OnEnemyKilled;
 
             // 恢复原始值
             if (hasOriginalValues && CharacterMainControl.Main?.dashAction != null)
@@ -1469,6 +1576,57 @@ namespace DashPlus
             catch (Exception ex)
             {
                 LogMessage($"调用StopAction异常: {ex.Message}");
+            }
+        }
+
+        // 击杀回血回调方法
+        void OnEnemyKilled(Health killedHealth, DamageInfo damageInfo)
+        {
+            if (!enableKillHeal) return;
+
+            // 检查是否为玩家击杀
+            if (damageInfo.fromCharacter == null || !damageInfo.fromCharacter.IsMainCharacter)
+            {
+                return;
+            }
+
+            // 检查受害者是否为敌人（不是玩家队伍）
+            if (killedHealth.team == Teams.player)
+            {
+                return;
+            }
+
+            // 获取玩家角色
+            var mainCharacter = CharacterMainControl.Main;
+            if (mainCharacter == null)
+            {
+                return;
+            }
+
+            // 计算回血量
+            float healAmount = killedHealth.MaxHealth * (healPercentage / 100f);
+            healAmount = Mathf.Min(healAmount, maxHealAmount);
+
+            if (healAmount <= 0)
+            {
+                return;
+            }
+
+            // 给玩家回血
+            var playerHealth = mainCharacter.GetComponent<Health>();
+            if (playerHealth != null && !playerHealth.IsDead)
+            {
+                float currentHealth = playerHealth.CurrentHealth;
+                float maxHealth = playerHealth.MaxHealth;
+
+                // 确保不会超过最大血量
+                healAmount = Mathf.Min(healAmount, maxHealth - currentHealth);
+
+                if (healAmount > 0)
+                {
+                    playerHealth.AddHealth(healAmount);
+                    LogMessage($"击杀回血: +{healAmount:F1} HP (当前: {currentHealth:F1}/{maxHealth:F1})");
+                }
             }
         }
 

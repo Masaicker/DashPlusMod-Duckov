@@ -33,6 +33,11 @@
 - 视野倍数调节 (0.2x-3.0x)
 - 快捷调整：当自定义视野开启时，可使用 Ctrl+鼠标滚轮 进行平滑视野缩放
 
+#### 击杀回血参数
+- 击杀回血开关 (启用/禁用击杀敌人时回血)
+- 回血比例调节 (0.1%-100%，基于敌人最大血量的百分比)
+- 最大回血量设置 (1-200 HP，单次击杀回血上限)
+
 #### 使用方法
 1. **安装Mod**:
    - 手动安装：将DashPlus.dll放入游戏Mods文件夹
@@ -55,6 +60,7 @@
 - ✅ 无限负重系统（通过修改MaxWeight属性实现）
 - ✅ 视野控制系统（通过修改FOV参数实现）
 - ✅ 闪避换弹系统（底层绕过动作系统，固定时间快速换弹）
+- ✅ 击杀回血系统（基于Health.OnDead事件监听）
 
 ---
 
@@ -87,6 +93,11 @@
 - FOV Multiplier Adjustment (0.2x-3.0x)
 - Quick Adjustment: When custom FOV is enabled, use Ctrl+Mouse Wheel for smooth FOV scaling
 
+#### Kill Heal Parameters
+- Kill Heal Toggle (Enable/Disable health restoration when killing enemies)
+- Heal Percentage Adjustment (0.1%-100%, based on enemy max health percentage)
+- Max Heal Amount Setting (1-200 HP, maximum heal per kill)
+
 #### Usage
 1. **Install Mod**:
    - Manual Installation: Place DashPlus.dll in the game Mods folder
@@ -109,6 +120,7 @@
 - ✅ Infinite weight system (implemented by modifying MaxWeight property)
 - ✅ FOV control system (modifies FOV parameters)
 - ✅ Dash reload system (bypasses action system for instant fixed-time reload)
+- ✅ Kill heal system (based on Health.OnDead event listening)
 
 ---
 
