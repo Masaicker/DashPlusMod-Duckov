@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
+using System.Collections;
 
 namespace DashPlus
 {
@@ -126,15 +127,23 @@ namespace DashPlus
             base.OnAfterSetup();
             SceneManager.sceneLoaded += OnSceneLoaded;
 
+            // 订阅LevelManager场景完全加载完成事件
+            LevelManager.OnAfterLevelInitialized += OnLevelFullyLoaded;
+
             // 订阅击杀事件
             Health.OnDead += OnEnemyKilled;
 
             LoadSettings();
-            Invoke(nameof(ApplyModIfExists), 1f);
         }
 
         void Update()
         {
+
+            if (Input.GetKeyDown(KeyCode.Z) && Input.GetKey(KeyCode.LeftControl) && enableLogging)
+            {
+                TestGetHashCode();
+            }
+            
             // 检查快捷键：Ctrl+G 显示/隐藏GUI
             if (Input.GetKeyDown(KeyCode.G) && Input.GetKey(KeyCode.LeftControl))
             {
@@ -208,9 +217,142 @@ namespace DashPlus
         void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             //切换场景后InputManager会变化，cachedInputManager就会失效
-            cachedInputManager = null;
+            //cachedInputManager = null;
             LogMessage($"场景切换: {scene.name}");
+            //if (scene.name == "MainMenu") hasOriginalValues = false;
+        }
+
+        /// <summary>
+        /// LevelManager场景完全加载完成回调（在"Done!"之前触发）
+        /// 这是确保所有游戏对象完全初始化后的最佳时机
+        /// </summary>
+        void OnLevelFullyLoaded()
+        {
+            cachedInputManager = null;
+            hasOriginalValues = false;
+            LogMessage("LevelManager场景完全加载完成 - 所有游戏对象已就绪");
             ApplyModIfExists();
+        }
+
+        private void TestGetHashCode()
+        {
+            var main = CharacterMainControl.Main;
+            if (main?.CharacterItem == null) return;
+            LogMessage("----------------------");
+            LogMessage($"hash:{main.CharacterItem.GetStat("WalkSpeed".GetHashCode()).BaseValue} 走路:{main.CharacterWalkSpeed} 保存值:{originalWalkSpeed}");
+            LogMessage($"hash:{main.CharacterItem.GetStat("RunSpeed".GetHashCode()).BaseValue} 奔跑:{main.CharacterRunSpeed} 保存值:{originalRunSpeed}");
+            LogMessage($"hash:{main.CharacterItem.GetStat("StaminaDrainRate".GetHashCode()).BaseValue} 减益:{main.StaminaDrainRate} 保存值:{originalStaminaDrainRate}");
+            LogMessage($"hash:{main.CharacterItem.GetStat("StaminaRecoverRate".GetHashCode()).BaseValue} 恢复:{main.StaminaRecoverRate} 保存值:{originalStaminaRecoverRate}");
+            LogMessage($"hash:{main.CharacterItem.GetStat("StaminaRecoverTime".GetHashCode()).BaseValue} 恢复时间:{main.StaminaRecoverTime} 保存值:{originalStaminaRecoverTime}");
+            LogMessage($"hash:{main.CharacterItem.GetStat("WalkAcc".GetHashCode()).BaseValue} 移动惯性:{main.CharacterWalkAcc} 保存值:{originalWalkAcc}");
+            LogMessage($"hash:{main.CharacterItem.GetStat("RunAcc".GetHashCode()).BaseValue} 奔跑惯性:{main.CharacterRunAcc} 保存值:{originalRunAcc}");
+            LogMessage($"hash:{main.CharacterItem.GetStat("MaxWeight".GetHashCode()).BaseValue} 负重:{main.MaxWeight} 保存值:{originalMaxWeight}");
+            LogMessage("----------------------");
+        }
+
+        /// <summary>
+        /// 延迟保存CharacterItem相关参数的原始值
+        /// </summary>
+        private void DelayedSaveOriginalValues()
+        {
+            StartCoroutine(SaveOriginalValuesCoroutine());
+        }
+
+        /// <summary>
+        /// 协程：延迟0.2秒后保存所有原始值
+        /// </summary>
+        private IEnumerator SaveOriginalValuesCoroutine()
+        {
+            yield return new WaitForSeconds(0.2f);
+
+            var main = CharacterMainControl.Main;
+            if (main == null) yield break;
+            // 保存所有CharacterItem相关参数的原始值 - 使用 GetStat 的 BaseValue 以保持一致性
+            if (main.CharacterItem != null)
+            {
+                SaveOriginalValuesFromCharacterItem(main);
+            }
+            else
+            {
+                // 备用方案：直接从 CharacterMainControl 获取所有参数
+                SaveOriginalValuesFromMainControl(main);
+            }
+
+            // 保存视野原始值（无论哪种方案都需要）
+            SaveOriginalFOVValues();
+
+            hasOriginalValues = true;
+            
+            ApplyMod(main);
+
+            LogMessage(
+                $"闪避原始值: 曲线key数={originalSpeedCurve?.keys.Length}, 体力={originalStaminaCost}, 冷却={originalCoolTime:F2}s");
+            LogMessage(
+                $"奔跑原始值: 步速={originalWalkSpeed:F2}, 奔速={originalRunSpeed:F2}, 消耗率={originalStaminaDrainRate:F2}, 恢复率={originalStaminaRecoverRate:F2}, 恢复延迟={originalStaminaRecoverTime:F2}");
+        }
+
+        /// <summary>
+        /// 从CharacterItem保存原始值
+        /// </summary>
+        private void SaveOriginalValuesFromCharacterItem(CharacterMainControl main)
+        {
+            // 奔跑参数
+            var walkStat = main.CharacterItem.GetStat("WalkSpeed".GetHashCode());
+            var runStat = main.CharacterItem.GetStat("RunSpeed".GetHashCode());
+            var drainStat = main.CharacterItem.GetStat("StaminaDrainRate".GetHashCode());
+            var recoverStat = main.CharacterItem.GetStat("StaminaRecoverRate".GetHashCode());
+            var recoverTimeStat = main.CharacterItem.GetStat("StaminaRecoverTime".GetHashCode());
+
+            // 移动惯性参数
+            var walkAccStat = main.CharacterItem.GetStat("WalkAcc".GetHashCode());
+            var runAccStat = main.CharacterItem.GetStat("RunAcc".GetHashCode());
+
+            // 负重参数
+            var maxWeightStat = main.CharacterItem.GetStat("MaxWeight".GetHashCode());
+
+            // 奔跑参数原始值
+            originalWalkSpeed = walkStat.BaseValue;
+            originalRunSpeed = runStat.BaseValue;
+            originalStaminaDrainRate = drainStat.BaseValue;
+            originalStaminaRecoverRate = recoverStat.BaseValue;
+            originalStaminaRecoverTime = recoverTimeStat.BaseValue;
+
+            // 移动惯性原始值
+            originalWalkAcc = walkAccStat.BaseValue;
+            originalRunAcc = runAccStat.BaseValue;
+
+            // 负重原始值
+            originalMaxWeight = maxWeightStat.BaseValue;
+            
+            TestGetHashCode();
+        }
+
+        /// <summary>
+        /// 从MainControl保存原始值（备用方案）
+        /// </summary>
+        private void SaveOriginalValuesFromMainControl(CharacterMainControl main)
+        {
+            originalWalkSpeed = main.CharacterWalkSpeed;
+            originalRunSpeed = main.CharacterRunSpeed;
+            originalStaminaDrainRate = main.StaminaDrainRate;
+            originalStaminaRecoverRate = main.StaminaRecoverRate;
+            originalStaminaRecoverTime = main.StaminaRecoverTime;
+            originalWalkAcc = main.CharacterWalkAcc;
+            originalRunAcc = main.CharacterRunAcc;
+            originalMaxWeight = main.MaxWeight;
+        }
+
+        /// <summary>
+        /// 保存视野原始值
+        /// </summary>
+        private void SaveOriginalFOVValues()
+        {
+            var gameCamera = GameCamera.Instance;
+            if (gameCamera != null)
+            {
+                originalDefaultFOV = gameCamera.defaultFOV;
+                originalAdsFOV = gameCamera.adsFOV;
+            }
         }
 
         void ApplyModIfExists()
@@ -230,78 +372,10 @@ namespace DashPlus
                 currentFOVValue = fovMultiplier;
                 targetFOVValue = fovMultiplier;
 
-                // 保存所有CharacterItem相关参数的原始值 - 使用 GetStat 的 BaseValue 以保持一致性
-                if (main.CharacterItem != null)
-                {
-                    // 奔跑参数
-                    var walkStat = main.CharacterItem.GetStat("WalkSpeed".GetHashCode());
-                    var runStat = main.CharacterItem.GetStat("RunSpeed".GetHashCode());
-                    var drainStat = main.CharacterItem.GetStat("StaminaDrainRate".GetHashCode());
-                    var recoverStat = main.CharacterItem.GetStat("StaminaRecoverRate".GetHashCode());
-                    var recoverTimeStat = main.CharacterItem.GetStat("StaminaRecoverTime".GetHashCode());
-
-                    // 移动惯性参数
-                    var walkAccStat = main.CharacterItem.GetStat("WalkAcc".GetHashCode());
-                    var runAccStat = main.CharacterItem.GetStat("RunAcc".GetHashCode());
-
-                    // 负重参数
-                    var maxWeightStat = main.CharacterItem.GetStat("MaxWeight".GetHashCode());
-
-                    // 奔跑参数原始值
-                    originalWalkSpeed = walkStat?.BaseValue ?? main.CharacterWalkSpeed;
-                    originalRunSpeed = runStat?.BaseValue ?? main.CharacterRunSpeed;
-                    originalStaminaDrainRate = drainStat?.BaseValue ?? main.StaminaDrainRate;
-                    originalStaminaRecoverRate = recoverStat?.BaseValue ?? main.StaminaRecoverRate;
-                    originalStaminaRecoverTime = recoverTimeStat?.BaseValue ?? main.StaminaRecoverTime;
-
-                    // 移动惯性原始值
-                    originalWalkAcc = walkAccStat?.BaseValue ?? main.CharacterWalkAcc;
-                    originalRunAcc = runAccStat?.BaseValue ?? main.CharacterRunAcc;
-
-                    // 负重原始值
-                    originalMaxWeight = maxWeightStat?.BaseValue ?? main.MaxWeight;
-
-                    // 视野原始值
-                    var gameCamera = GameCamera.Instance;
-                    if (gameCamera != null)
-                    {
-                        originalDefaultFOV = gameCamera.defaultFOV;
-                        originalAdsFOV = gameCamera.adsFOV;
-                    }
-                }
-                else
-                {
-                    // 备用方案：直接从 CharacterMainControl 获取所有参数
-                    originalWalkSpeed = main.CharacterWalkSpeed;
-                    originalRunSpeed = main.CharacterRunSpeed;
-                    originalStaminaDrainRate = main.StaminaDrainRate;
-                    originalStaminaRecoverRate = main.StaminaRecoverRate;
-                    originalStaminaRecoverTime = main.StaminaRecoverTime;
-                    originalWalkAcc = main.CharacterWalkAcc;
-                    originalRunAcc = main.CharacterRunAcc;
-                    originalMaxWeight = main.MaxWeight;
-
-                    // 视野原始值备用方案
-                    var gameCamera = GameCamera.Instance;
-                    if (gameCamera != null)
-                    {
-                        originalDefaultFOV = gameCamera.defaultFOV;
-                        originalAdsFOV = gameCamera.adsFOV;
-                    }
-                }
-
-                hasOriginalValues = true;
-
-                LogMessage(
-                    $"闪避原始值: 曲线key数={originalSpeedCurve?.keys.Length}, 体力={originalStaminaCost}, 冷却={originalCoolTime:F2}s");
-                LogMessage(
-                    $"奔跑原始值: 步速={originalWalkSpeed:F2}, 奔速={originalRunSpeed:F2}, 消耗率={originalStaminaDrainRate:F2}, 恢复率={originalStaminaRecoverRate:F2}, 恢复延迟={originalStaminaRecoverTime:F2}");
-                LogMessage(
-                    $"移动惯性原始值: 步行加速度={originalWalkAcc:F2}, 奔跑加速度={originalRunAcc:F2}");
-                LogMessage($"负重原始值: 最大负重={originalMaxWeight:F2}");
-                LogMessage($"视野原始值: 默认={originalDefaultFOV:F2}, 瞄准={originalAdsFOV:F2}");
+                // 延迟0.2秒保存原始值，确保游戏对象完全加载
+                DelayedSaveOriginalValues();
+                return;
             }
-
             ApplyMod(main);
         }
 
@@ -1130,9 +1204,14 @@ namespace DashPlus
         protected override void OnBeforeDeactivate()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            
+            // 取消订阅关卡加载完成事件
+            LevelManager.OnAfterLevelInitialized -= OnLevelFullyLoaded;
 
             // 取消订阅击杀事件
             Health.OnDead -= OnEnemyKilled;
+            
+            
 
             // 恢复原始值
             if (hasOriginalValues && CharacterMainControl.Main?.dashAction != null)
