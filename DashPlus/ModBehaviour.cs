@@ -149,6 +149,12 @@ namespace DashPlus
             {
                 showGUI = !showGUI;
                 LogMessage($"GUI {(showGUI ? "显示" : "隐藏")}");
+
+                // 关闭GUI时保存设置
+                if (!showGUI)
+                {
+                    SaveSettings();
+                }
             }
 
             // 检查快捷键：Ctrl+滚轮调整FOV
@@ -720,6 +726,12 @@ namespace DashPlus
             LogMessage("设置已保存");
         }
 
+        void OnApplicationQuit()
+        {
+            // 游戏退出时保存设置
+            SaveSettings();
+        }
+
         void OnGUI()
         {
             if (!showGUI) return;
@@ -740,6 +752,7 @@ namespace DashPlus
             if (GUI.Button(new Rect(guiRect.width - 25, 5, 20, 20), "×"))
             {
                 showGUI = false;
+                SaveSettings(); // 关闭GUI时保存设置
             }
 
             // 增加标题栏下方空间，让标题区域更宽敞
@@ -841,7 +854,6 @@ namespace DashPlus
             if (newDashMultiplier != dashDistanceMultiplier)
             {
                 dashDistanceMultiplier = newDashMultiplier;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -855,7 +867,6 @@ namespace DashPlus
             if (newStamina != staminaCost)
             {
                 staminaCost = newStamina;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -869,7 +880,6 @@ namespace DashPlus
             if (newCoolTime != coolTime)
             {
                 coolTime = newCoolTime;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -882,7 +892,6 @@ namespace DashPlus
             if (newDashReload != enableDashReload)
             {
                 enableDashReload = newDashReload;
-                SaveSettings();
                 LogMessage($"闪避换弹功能: {(enableDashReload ? "启用" : "禁用")}");
             }
 
@@ -902,7 +911,6 @@ namespace DashPlus
             if (Math.Abs(newPercentage - dashReloadPercentage) > 0.5f)
             {
                 dashReloadPercentage = (int)newPercentage;
-                SaveSettings();
                 LogMessage($"闪避换弹加速: {dashReloadPercentage}%");
             }
 
@@ -910,7 +918,7 @@ namespace DashPlus
             GUILayout.Label("=== 其他参数 / Other Parameters ===", GUI.skin.box);
             GUILayout.Space(5);
 
-            // 射击打断换弹开关 UI上使用“开火”，代码内部使用“射击”
+            // 射击打断换弹开关 UI上使用"开火"，代码内部使用"射击"
             GUILayout.BeginHorizontal();
             GUILayout.Label("开火打断换弹 / Shoot Interrupt:", GUILayout.Width(180));
             bool newShootInterrupt = GUILayout.Toggle(enableShootInterruptReload, enableShootInterruptReload ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
@@ -919,7 +927,6 @@ namespace DashPlus
             if (newShootInterrupt != enableShootInterruptReload)
             {
                 enableShootInterruptReload = newShootInterrupt;
-                SaveSettings();
                 LogMessage($"射击打断换弹功能: {(enableShootInterruptReload ? "启用" : "禁用")}");
             }
         }
@@ -939,7 +946,6 @@ namespace DashPlus
             if (newWalkMultiplier != walkSpeedMultiplier)
             {
                 walkSpeedMultiplier = newWalkMultiplier;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -953,7 +959,6 @@ namespace DashPlus
             if (newRunMultiplier != runSpeedMultiplier)
             {
                 runSpeedMultiplier = newRunMultiplier;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -967,7 +972,6 @@ namespace DashPlus
             if (newDrainMultiplier != staminaDrainRateMultiplier)
             {
                 staminaDrainRateMultiplier = newDrainMultiplier;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -981,7 +985,6 @@ namespace DashPlus
             if (newRecoverMultiplier != staminaRecoverRateMultiplier)
             {
                 staminaRecoverRateMultiplier = newRecoverMultiplier;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -995,7 +998,6 @@ namespace DashPlus
             if (newRecoverTimeMultiplier != staminaRecoverTimeMultiplier)
             {
                 staminaRecoverTimeMultiplier = newRecoverTimeMultiplier;
-                SaveSettings();
                 ApplyModIfExists();
             }
         }
@@ -1014,7 +1016,6 @@ namespace DashPlus
             if (newDisableInertia != disableMovementInertia)
             {
                 disableMovementInertia = newDisableInertia;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -1027,7 +1028,6 @@ namespace DashPlus
             if (newInfiniteWeight != enableInfiniteWeight)
             {
                 enableInfiniteWeight = newInfiniteWeight;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -1045,7 +1045,6 @@ namespace DashPlus
             if (newLogging != enableLogging)
             {
                 enableLogging = newLogging;
-                SaveSettings();
                 LogMessage($"日志输出已{(enableLogging ? "开启" : "关闭")}");
             }
         }
@@ -1064,7 +1063,6 @@ namespace DashPlus
             if (newCustomFOV != enableCustomFOV)
             {
                 enableCustomFOV = newCustomFOV;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -1082,7 +1080,6 @@ namespace DashPlus
             if (newFOVMultiplier != fovMultiplier && enableCustomFOV)
             {
                 fovMultiplier = newFOVMultiplier;
-                SaveSettings();
                 ApplyModIfExists();
             }
 
@@ -1109,7 +1106,6 @@ namespace DashPlus
             if (newKillHeal != enableKillHeal)
             {
                 enableKillHeal = newKillHeal;
-                SaveSettings();
                 LogMessage($"击杀回血功能: {(enableKillHeal ? "启用" : "禁用")}");
             }
 
@@ -1126,7 +1122,6 @@ namespace DashPlus
             if (Math.Abs(newHealPercentage - healPercentage) > 0.1f)
             {
                 healPercentage = newHealPercentage;
-                SaveSettings();
                 LogMessage($"回血比例调整为: {healPercentage:F1}%");
             }
 
@@ -1140,7 +1135,6 @@ namespace DashPlus
             if (Math.Abs(newMaxHeal - maxHealAmount) > 0.5f)
             {
                 maxHealAmount = newMaxHeal;
-                SaveSettings();
                 LogMessage($"最大回血量调整为: {maxHealAmount:F1}");
             }
 
