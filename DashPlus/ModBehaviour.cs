@@ -155,6 +155,7 @@ namespace DashPlus
             // 检查快捷键：Ctrl+滚轮调整FOV
             if (Input.GetKey(KeyCode.LeftControl) && enableCustomFOV)
             {
+                if (guiPanel == null) return;
                 float scrollWheel = Input.GetAxis("Mouse ScrollWheel");
                 if (Mathf.Abs(scrollWheel) > 0.01f)
                 {
