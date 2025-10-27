@@ -86,6 +86,7 @@ namespace DashPlus
         // GUI控制
         private bool showGUI = false;
         private Rect guiRect = new Rect(Screen.width / 2 - 250, Screen.height / 2 - 200, 500, 400);
+        private GameObject? guiPanel; // GUI面板GameObject，用于InputManager
 
         // 标签页控制
         private int selectedTab = 0; // 0: 闪避, 1: 奔跑, 2: 视野, 3: 回血, 4: 其他设置
@@ -125,7 +126,8 @@ namespace DashPlus
         protected override void OnAfterSetup()
         {
             base.OnAfterSetup();
-            SceneManager.sceneLoaded += OnSceneLoaded;
+            //SceneManager.sceneLoaded += OnSceneLoaded;
+            SceneManager.activeSceneChanged += OnActiveSceneChanged;
 
             // 订阅LevelManager场景完全加载完成事件
             LevelManager.OnAfterLevelInitialized += OnLevelFullyLoaded;
@@ -147,14 +149,7 @@ namespace DashPlus
             // 检查快捷键：Ctrl+G 显示/隐藏GUI
             if (Input.GetKeyDown(KeyCode.G) && Input.GetKey(KeyCode.LeftControl))
             {
-                showGUI = !showGUI;
-                LogMessage($"GUI {(showGUI ? "显示" : "隐藏")}");
-
-                // 关闭GUI时保存设置
-                if (!showGUI)
-                {
-                    SaveSettings();
-                }
+                ToggleGUI();
             }
 
             // 检查快捷键：Ctrl+滚轮调整FOV
@@ -220,13 +215,105 @@ namespace DashPlus
             }
         }
 
-        void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        /// <summary>
+        /// 切换GUI显示状态并管理输入控制
+        /// </summary>
+        void ToggleGUI()
         {
-            //切换场景后InputManager会变化，cachedInputManager就会失效
-            //cachedInputManager = null;
-            LogMessage($"场景切换: {scene.name}");
-            //if (scene.name == "MainMenu") hasOriginalValues = false;
+            // 如果GUI面板不存在，无法切换状态
+            if (guiPanel == null)
+            {
+                LogMessage("GUI面板不存在，无法切换状态");
+                return;
+            }
+
+            showGUI = !showGUI;
+            guiPanel.SetActive(showGUI);
+
+            if (showGUI)
+            {
+                // GUI显示时：禁用游戏输入，显示鼠标
+                try
+                {
+                    InputManager.DisableInput(guiPanel);
+                    Cursor.lockState = CursorLockMode.None;
+                    Cursor.visible = true;
+                    LogMessage("GUI已显示 - 游戏输入已暂停");
+                }
+                catch (Exception ex)
+                {
+                    LogMessage($"显示GUI时发生异常: {ex.Message}");
+                    // 发生异常时重置状态
+                    showGUI = false;
+                    guiPanel.SetActive(false);
+                }
+            }
+            else
+            {
+                // GUI隐藏时：恢复游戏输入
+                try
+                {
+                    InputManager.ActiveInput(guiPanel);
+                    LogMessage("GUI已隐藏 - 游戏输入已恢复");
+
+                    // 关闭GUI时保存设置
+                    SaveSettings();
+                }
+                catch (Exception ex)
+                {
+                    LogMessage($"隐藏GUI时发生异常: {ex.Message}");
+                    // 发生异常时重置状态
+                    showGUI = true;
+                    guiPanel.SetActive(true);
+                }
+            }
         }
+
+        
+        /// <summary>
+        /// 创建GUI面板GameObject，用于InputManager输入管理
+        /// </summary>
+        void CreateGUIPanel()
+        {
+            if (guiPanel != null)
+            {
+                return;
+            }
+
+            guiPanel = new GameObject("DashPlus_GUIPanel");
+            guiPanel.SetActive(false); // 初始状态为隐藏
+
+            LogMessage("GUI面板已创建");
+        }
+
+        void OnActiveSceneChanged(Scene fromScene, Scene toScene)
+        {
+            LogMessage($"场景切换: {fromScene.name} -> {toScene.name}");
+
+            // 在场景切换时强制关闭GUI，此时两个场景的对象都还存在
+            if (showGUI)
+            {
+                showGUI = false;
+                // 恢复输入控制（此时guiPanel肯定还存在）
+                if (guiPanel != null)
+                {
+                    InputManager.ActiveInput(guiPanel);
+                    guiPanel.SetActive(false);
+                }
+                // 保存设置
+                SaveSettings();
+                LogMessage("场景切换时已强制关闭GUI");
+            }
+        }
+
+        // void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        // {
+        //     //切换场景后InputManager会变化，cachedInputManager就会失效
+        //     //cachedInputManager = null;
+        //     LogMessage($"场景切换: {scene.name}");
+        //
+        //     //if (scene.name == "MainMenu") hasOriginalValues = false;
+        // }
 
         /// <summary>
         /// LevelManager场景完全加载完成回调（在"Done!"之前触发）
@@ -237,6 +324,10 @@ namespace DashPlus
             cachedInputManager = null;
             hasOriginalValues = false;
             LogMessage("LevelManager场景完全加载完成 - 所有游戏对象已就绪");
+
+            // 在游戏对象完全初始化后创建GUI面板
+            CreateGUIPanel();
+
             ApplyModIfExists();
         }
 
@@ -751,8 +842,7 @@ namespace DashPlus
             // 右上角关闭按钮
             if (GUI.Button(new Rect(guiRect.width - 25, 5, 20, 20), "×"))
             {
-                showGUI = false;
-                SaveSettings(); // 关闭GUI时保存设置
+                ToggleGUI(); // 使用ToggleGUI确保正确的输入管理
             }
 
             // 增加标题栏下方空间，让标题区域更宽敞
@@ -820,7 +910,6 @@ namespace DashPlus
 
             GUILayout.Space(5);
             GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
-            GUILayout.Label("建议在ESC暂停菜单中使用 / Recommended in ESC pause menu", GUI.skin.box);
 
             GUILayout.EndVertical();
 
@@ -1197,15 +1286,17 @@ namespace DashPlus
 
         protected override void OnBeforeDeactivate()
         {
-            SceneManager.sceneLoaded -= OnSceneLoaded;
-            
+            //SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.activeSceneChanged -= OnActiveSceneChanged;
+
             // 取消订阅关卡加载完成事件
             LevelManager.OnAfterLevelInitialized -= OnLevelFullyLoaded;
 
             // 取消订阅击杀事件
             Health.OnDead -= OnEnemyKilled;
-            
-            
+
+            // 如果GUI正在显示，先恢复输入控制
+            if (guiPanel != null) InputManager.ActiveInput(guiPanel);
 
             // 恢复原始值
             if (hasOriginalValues && CharacterMainControl.Main?.dashAction != null)
@@ -1327,6 +1418,7 @@ namespace DashPlus
 
                 LogMessage("所有参数已恢复原始值");
             }
+            LogMessage("再见鸭！");
 
             base.OnBeforeDeactivate();
         }
@@ -1493,7 +1585,7 @@ namespace DashPlus
             }
         }
 
-        System.Collections.IEnumerator ApplyTimeAccumulatedReductionDelayed(object gun)
+        IEnumerator ApplyTimeAccumulatedReductionDelayed(object gun)
         {
             // 等待一帧，确保动作系统已正确初始化换弹状态
             yield return null;
