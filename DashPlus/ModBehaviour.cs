@@ -155,10 +155,13 @@ namespace DashPlus
             // 检查快捷键：Ctrl+滚轮调整FOV
             if (Input.GetKey(KeyCode.LeftControl) && enableCustomFOV)
             {
-                if (guiPanel == null) return;
                 float scrollWheel = Input.GetAxis("Mouse ScrollWheel");
                 if (Mathf.Abs(scrollWheel) > 0.01f)
                 {
+                    if (!EnsureGUIExists())
+                    {
+                        return;
+                    }
                     // 开始滚动或继续滚动
                     if (!isScrollingFOV)
                     {
@@ -221,15 +224,14 @@ namespace DashPlus
         /// </summary>
         void ToggleGUI()
         {
-            // 如果GUI面板不存在，无法切换状态
-            if (guiPanel == null)
+            // 确保GUI面板存在
+            if (!EnsureGUIExists())
             {
-                LogMessage("GUI面板不存在，无法切换状态");
                 return;
             }
 
             showGUI = !showGUI;
-            guiPanel.SetActive(showGUI);
+            guiPanel?.SetActive(showGUI);
 
             if (showGUI)
             {
@@ -246,7 +248,7 @@ namespace DashPlus
                     LogMessage($"显示GUI时发生异常: {ex.Message}");
                     // 发生异常时重置状态
                     showGUI = false;
-                    guiPanel.SetActive(false);
+                    guiPanel?.SetActive(false);
                 }
             }
             else
@@ -265,12 +267,33 @@ namespace DashPlus
                     LogMessage($"隐藏GUI时发生异常: {ex.Message}");
                     // 发生异常时重置状态
                     showGUI = true;
-                    guiPanel.SetActive(true);
+                    guiPanel?.SetActive(true);
                 }
             }
         }
 
-        
+        /// <summary>
+        /// 确保GUI面板存在，如果不存在则尝试创建
+        /// 统一处理GUI面板创建逻辑，避免代码重复
+        /// </summary>
+        bool EnsureGUIExists()
+        {
+            // 如果GUI面板已存在，直接返回成功
+            if (guiPanel != null)
+            {
+                return true;
+            }
+
+            // 尝试创建GUI面板
+            if (!TryCreateGUI())
+            {
+                LogMessage("GUI创建失败：当前环境不支持");
+                return false;
+            }
+            return true;
+        }
+
+
         /// <summary>
         /// 创建GUI面板GameObject，用于InputManager输入管理
         /// </summary>
@@ -927,6 +950,140 @@ namespace DashPlus
 
             // 拖动功能
             GUI.DragWindow();
+        }
+
+        /// <summary>
+        /// 尝试创建GUI面板，通过检测Spawning bodies状态判断是否合适
+        /// 这个方法作为OnAfterLevelInitialized的备用机制
+        /// </summary>
+        bool TryCreateGUI()
+        {
+            // 统一检查游戏系统是否就绪且角色可以安全操作
+            if (!IsGameReadyForGUI())
+            {
+                return false;
+            }
+
+            // 检查当前是否在主菜单或其他不支持Mod的界面
+            if (IsInUnsupportedScene())
+            {
+                LogMessage("当前场景不支持Mod界面（如主菜单）");
+                return false;
+            }
+
+            // 所有检查通过，创建GUI
+            try
+            {
+                // 重置状态以确保正确初始化
+                // cachedInputManager = null;
+                // hasOriginalValues = false;
+
+                // 创建GUI面板
+                CreateGUIPanel();
+
+                // 应用Mod设置
+                //ApplyModIfExists();
+
+                LogMessage("通过备用机制成功创建GUI面板");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"创建GUI时发生异常: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 统一检查游戏系统是否就绪且角色可以安全操作
+        /// 整合了基本系统检查和角色可操作性检查
+        /// </summary>
+        bool IsGameReadyForGUI()
+        {
+            try
+            {
+                // 1. 检查LevelManager是否存在
+                if (LevelManager.Instance == null)
+                {
+                    LogMessage("LevelManager不存在，游戏系统未就绪");
+                    return false;
+                }
+
+                // 2. 检查关卡是否初始化完成（这是关键条件）
+                if (!LevelManager.AfterInit)
+                {
+                    LogMessage($"关卡初始化未完成 - LevelInitializing: {LevelManager.LevelInitializing}, LevelInited: {LevelManager.LevelInited}");
+                    return false;
+                }
+
+                // 3. 检查是否正在加载子场景（通过LevelManager状态间接判断）
+                if (LevelManager.LevelInitializing)
+                {
+                    LogMessage("关卡正在初始化中，暂时无法创建GUI");
+                    return false;
+                }
+
+                // 4. 检查主角色是否存在且激活
+                var mainCharacter = LevelManager.Instance.MainCharacter;
+                if (mainCharacter == null || !mainCharacter.gameObject.activeInHierarchy)
+                {
+                    LogMessage("主角色不存在或未激活，无法创建GUI");
+                    return false;
+                }
+
+                // 5. 检查核心角色组件是否完全初始化
+                var main = CharacterMainControl.Main;
+                if (main == null || main.CharacterItem == null || main.dashAction == null)
+                {
+                    LogMessage("角色组件未完全初始化，无法创建GUI");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"检查游戏就绪状态时发生异常: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 检查当前是否在不支持Mod的界面（如主菜单）
+        /// </summary>
+        bool IsInUnsupportedScene()
+        {
+            try
+            {
+                // 检查当前场景名称
+                string currentSceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+
+                // 主菜单场景通常的名称
+                string[] unsupportedScenes = { "MainMenu", "Menu", "Loading", "Intro" };
+
+                foreach (string unsupported in unsupportedScenes)
+                {
+                    if (currentSceneName.Contains(unsupported, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
+                // 检查角色是否在游戏中（是否有可操控的角色）
+                var main = CharacterMainControl.Main;
+                if (main == null || main.CharacterItem == null)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"检查场景支持性时发生异常: {ex.Message}");
+                // 发生异常时保守处理，认为不支持
+                return true;
+            }
         }
 
         void DrawDashTab()
