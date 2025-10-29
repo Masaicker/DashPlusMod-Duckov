@@ -53,12 +53,26 @@ namespace DashPlus
         [Tooltip("启用击杀回血功能")]
         public bool enableKillHeal = false;
         [Tooltip("回血比例(基于敌人最大血量的百分比)")]
-        public float healPercentage = 5.0f;
+        public int healPercentage = 5;
         [Tooltip("最大回血量上限")]
         public float maxHealAmount = 50.0f;
 
         [Header("调试设置")]
         [Tooltip("是否输出调试日志")] public bool enableLogging = false;
+
+        // 模态输入对话框状态管理
+        private bool showInputDialog = false;
+        private string? inputDialogTitle = "";
+        private string? inputDialogPrompt = "";
+        private float inputDialogValue = 0f;
+        private float inputDialogMinValue = 0f;
+        private float inputDialogMaxValue = 0f;
+        private int currentEditingParameter = -1; // 当前编辑的参数索引
+        private string inputDialogText = ""; // 输入框的文本
+        private Rect inputDialogRect = new Rect(0, 0, 320, 180); // 对话框位置和大小
+        private bool isDraggingDialog = false; // 是否正在拖动对话框
+        private Vector2 dragOffset = Vector2.zero; // 拖动偏移量
+        private Texture2D? whiteTexture; // 用于半透明背景的白色纹理
 
         private bool hasOriginalValues;
         private AnimationCurve? originalSpeedCurve;
@@ -134,6 +148,11 @@ namespace DashPlus
 
             // 订阅击杀事件
             Health.OnDead += OnEnemyKilled;
+
+            // 创建白色纹理用于半透明背景
+            whiteTexture = new Texture2D(1, 1);
+            whiteTexture.SetPixel(0, 0, Color.white);
+            whiteTexture.Apply();
 
             LoadSettings();
         }
@@ -314,19 +333,28 @@ namespace DashPlus
         {
             LogMessage($"场景切换: {fromScene.name} -> {toScene.name}");
 
-            // 在场景切换时强制关闭GUI，此时两个场景的对象都还存在
-            if (showGUI)
+            // 在场景切换时强制关闭所有GUI界面
+            if (showGUI || showInputDialog)
             {
                 showGUI = false;
+                showInputDialog = false; // 关闭输入对话框
+
                 // 恢复输入控制（此时guiPanel肯定还存在）
                 if (guiPanel != null)
                 {
                     InputManager.ActiveInput(guiPanel);
                     guiPanel.SetActive(false);
                 }
+
+                // 清理对话框状态
+                inputDialogTitle = "";
+                inputDialogPrompt = "";
+                inputDialogText = "";
+                isDraggingDialog = false;
+
                 // 保存设置
                 SaveSettings();
-                LogMessage("场景切换时已强制关闭GUI");
+                LogMessage("场景切换时已强制关闭所有GUI界面");
             }
         }
 
@@ -770,7 +798,7 @@ namespace DashPlus
 
             // 击杀回血设置
             enableKillHeal = PlayerPrefs.GetInt("DashPlus_KillHeal", 0) == 1;
-            healPercentage = PlayerPrefs.GetFloat("DashPlus_HealPercentage", 5.0f);
+            healPercentage = PlayerPrefs.GetInt("DashPlus_HealPercentage", 5);
             maxHealAmount = PlayerPrefs.GetFloat("DashPlus_MaxHealAmount", 50.0f);
 
             // 奔跑参数
@@ -816,7 +844,7 @@ namespace DashPlus
 
             // 击杀回血设置
             PlayerPrefs.SetInt("DashPlus_KillHeal", enableKillHeal ? 1 : 0);
-            PlayerPrefs.SetFloat("DashPlus_HealPercentage", healPercentage);
+            PlayerPrefs.SetInt("DashPlus_HealPercentage", healPercentage);
             PlayerPrefs.SetFloat("DashPlus_MaxHealAmount", maxHealAmount);
 
             // 奔跑参数
@@ -849,7 +877,7 @@ namespace DashPlus
 
         void OnGUI()
         {
-            if (!showGUI) return;
+            if (!showGUI && !showInputDialog) return;
 
             GUI.skin.window.fontSize = 14;
             GUI.skin.label.fontSize = 14;
@@ -857,8 +885,15 @@ namespace DashPlus
             GUI.skin.horizontalSliderThumb.fixedHeight = 25;
             GUI.skin.horizontalSliderThumb.fixedWidth = 25;
 
-            int windowId = 12345;
-            guiRect = GUI.Window(windowId, guiRect, DoWindow, "DashPlus 增强控制面板");
+            // 绘制模态输入对话框（如果需要显示）
+            DrawModalDialog();
+
+            // 只有在没有显示输入对话框时才绘制主窗口
+            if (showGUI && !showInputDialog)
+            {
+                int windowId = 12345;
+                guiRect = GUI.Window(windowId, guiRect, DoWindow, "DashPlus 增强控制面板");
+            }
         }
 
         void DoWindow(int windowId)
@@ -933,6 +968,7 @@ namespace DashPlus
             GUILayout.EndHorizontal();
 
             GUILayout.Space(5);
+            GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
             GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
 
             GUILayout.EndVertical();
@@ -1086,17 +1122,286 @@ namespace DashPlus
             }
         }
 
+        /// <summary>
+        /// 绘制带编辑按钮的滑动条控件
+        /// </summary>
+        /// <param name="label">参数标签（中英文）</param>
+        /// <param name="value">当前值</param>
+        /// <param name="minValue">最小值</param>
+        /// <param name="maxValue">最大值</param>
+        /// <param name="format">数值格式</param>
+        /// <param name="parameterIndex">参数索引，用于编辑对话框</param>
+        /// <param name="parameterName">参数名称，用于编辑对话框标题</param>
+        /// <returns>修改后的值</returns>
+        float DrawSliderWithEditButton(string label, float value, float minValue, float maxValue, string format = "F1", int parameterIndex = -1, string parameterName = "")
+        {
+            GUILayout.BeginHorizontal();
+
+            // 参数标签（恢复原始宽度）
+            GUILayout.Label(label, GUILayout.Width(180));
+
+            // 滑动条（恢复原始宽度）
+            float newValue = GUILayout.HorizontalSlider(value, minValue, maxValue, GUILayout.Width(200));
+
+            // 值显示（支持点击）- 为整数参数添加%符号
+            string valueText;
+            if (parameterIndex == 3 || parameterIndex == 10) // 换弹加速百分比或回血比例
+            {
+                valueText = $"{(int)value}%";
+            }
+            else
+            {
+                valueText = value.ToString(format);
+            }
+
+            bool isValueClicked = GUILayout.Button(valueText, GUI.skin.label, GUILayout.Width(50));
+
+            GUILayout.EndHorizontal();
+
+            // 检查是否点击了值显示
+            if (isValueClicked && parameterIndex >= 0 && GUI.enabled)
+            {
+                ShowInputDialog(parameterName, label, value, minValue, maxValue, parameterIndex);
+            }
+
+            return newValue;
+        }
+
+        /// <summary>
+        /// 显示输入对话框
+        /// </summary>
+        void ShowInputDialog(string title, string label, float currentValue, float minValue, float maxValue, int parameterIndex)
+        {
+            showInputDialog = true;
+            // 去掉冒号，用提示内容作为标题
+            inputDialogTitle = label;
+
+            // 根据参数类型决定范围显示格式
+            string rangeFormat;
+            string valueFormat;
+            if (parameterIndex == 3 || parameterIndex == 10) // 换弹加速百分比或回血比例
+            {
+                rangeFormat = $"范围 / Range: {(int)minValue} - {(int)maxValue}";
+                valueFormat = currentValue.ToString("F0");
+            }
+            else
+            {
+                rangeFormat = $"范围 / Range: {minValue:F1} - {maxValue:F1}";
+                valueFormat = currentValue.ToString("F1");
+            }
+
+            inputDialogPrompt = rangeFormat;
+            inputDialogValue = currentValue;
+            inputDialogMinValue = minValue;
+            inputDialogMaxValue = maxValue;
+            currentEditingParameter = parameterIndex;
+            inputDialogText = valueFormat;
+
+            // 将对话框居中显示
+            inputDialogRect.x = Screen.width / 2 - inputDialogRect.width / 2;
+            inputDialogRect.y = Screen.height / 2 - inputDialogRect.height / 2;
+        }
+
+        /// <summary>
+        /// 绘制模态输入对话框
+        /// </summary>
+        void DrawModalDialog()
+        {
+            if (!showInputDialog) return;
+
+            // 保存当前GUI状态
+            GUI.enabled = true;
+
+            // 绘制半透明背景
+            GUI.color = new Color(0, 0, 0, 0.7f); // 更深的半透明背景
+            if (whiteTexture != null)
+            {
+                GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), whiteTexture);
+            }
+            GUI.color = Color.white;
+
+            // 绘制对话框窗口
+            inputDialogRect = GUI.Window(99999, inputDialogRect, DrawDialogContent, inputDialogTitle);
+        }
+
+        /// <summary>
+        /// 绘制对话框内容
+        /// </summary>
+        void DrawDialogContent(int windowId)
+        {
+            // 处理键盘输入
+            if (Event.current.type == EventType.KeyDown)
+            {
+                if (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter)
+                {
+                    ConfirmInputDialog();
+                    Event.current.Use();
+                    return;
+                }
+
+                if (Event.current.keyCode == KeyCode.Escape)
+                {
+                    CancelInputDialog();
+                    Event.current.Use();
+                    return;
+                }
+            }
+
+            // 检查是否正在拖动
+            if (Event.current.type == EventType.MouseDrag && isDraggingDialog)
+            {
+                inputDialogRect.x += Event.current.delta.x;
+                inputDialogRect.y += Event.current.delta.y;
+                Event.current.Use();
+            }
+            else if (Event.current.type == EventType.MouseDown &&
+                     new Rect(0, 0, inputDialogRect.width, 20).Contains(Event.current.mousePosition))
+            {
+                isDraggingDialog = true;
+                dragOffset = Event.current.mousePosition;
+                Event.current.Use();
+            }
+            else if (Event.current.type == EventType.MouseUp)
+            {
+                isDraggingDialog = false;
+            }
+
+            GUILayout.Space(8);
+
+            // 范围提示（作为主要信息显示）
+            GUILayout.Label(inputDialogPrompt, GUI.skin.box);
+            GUILayout.Space(8);
+
+            // 输入框
+            GUI.SetNextControlName("InputField");
+            inputDialogText = GUILayout.TextField(inputDialogText, GUILayout.Height(25));
+
+            // 自动聚焦到输入框
+            GUI.FocusControl("InputField");
+
+            GUILayout.Space(12);
+
+            // 按钮区域
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+
+            if (GUILayout.Button("确定 / OK", GUILayout.Width(100), GUILayout.Height(30)))
+            {
+                ConfirmInputDialog();
+            }
+
+            GUILayout.Space(10);
+
+            if (GUILayout.Button("取消 / Cancel", GUILayout.Width(100), GUILayout.Height(30)))
+            {
+                CancelInputDialog();
+            }
+
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            // 窗口可拖动
+            GUI.DragWindow();
+        }
+
+        /// <summary>
+        /// 确认输入对话框
+        /// </summary>
+        void ConfirmInputDialog()
+        {
+            if (float.TryParse(inputDialogText, out float newValue))
+            {
+                // 限制数值范围
+                newValue = Mathf.Clamp(newValue, inputDialogMinValue, inputDialogMaxValue);
+
+                // 根据参数索引更新对应的值
+                UpdateParameterValue(currentEditingParameter, newValue);
+
+                LogMessage($"参数已更新: {inputDialogTitle} = {newValue:F1}");
+            }
+            else
+            {
+                LogMessage($"输入值无效: {inputDialogText}");
+            }
+
+            CancelInputDialog();
+        }
+
+        /// <summary>
+        /// 取消输入对话框
+        /// </summary>
+        void CancelInputDialog()
+        {
+            showInputDialog = false;
+            currentEditingParameter = -1;
+            inputDialogTitle = "";
+            inputDialogPrompt = "";
+            inputDialogText = "";
+            isDraggingDialog = false;
+        }
+
+        /// <summary>
+        /// 根据参数索引更新参数值
+        /// </summary>
+        void UpdateParameterValue(int parameterIndex, float newValue)
+        {
+            switch (parameterIndex)
+            {
+                case 0: // 闪避距离倍数
+                    dashDistanceMultiplier = newValue;
+                    break;
+                case 1: // 体力消耗
+                    staminaCost = newValue;
+                    break;
+                case 2: // 冷却时间
+                    coolTime = newValue;
+                    break;
+                case 3: // 换弹加速百分比 - 整数，四舍五入
+                    dashReloadPercentage = (int)Mathf.Round(newValue);
+                    break;
+                case 4: // 步行速度倍数
+                    walkSpeedMultiplier = newValue;
+                    break;
+                case 5: // 奔跑速度倍数
+                    runSpeedMultiplier = newValue;
+                    break;
+                case 6: // 体力消耗率倍数
+                    staminaDrainRateMultiplier = newValue;
+                    break;
+                case 7: // 体力恢复率倍数
+                    staminaRecoverRateMultiplier = newValue;
+                    break;
+                case 8: // 体力恢复延迟倍数
+                    staminaRecoverTimeMultiplier = newValue;
+                    break;
+                case 9: // 视野倍数
+                    fovMultiplier = newValue;
+                    break;
+                case 10: // 回血比例 - 整数，四舍五入
+                    healPercentage = (int)Mathf.Round(newValue);
+                    break;
+                case 11: // 最大回血量
+                    maxHealAmount = newValue;
+                    break;
+                default:
+                    LogMessage($"未知的参数索引: {parameterIndex}");
+                    return;
+            }
+
+            // 应用修改
+            ApplyModIfExists();
+        }
+
         void DrawDashTab()
         {
             GUILayout.Label("=== 闪避参数 / Dash Parameters ===", GUI.skin.box);
             GUILayout.Space(5);
 
             // 闪避距离倍数
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("闪避距离倍数 / Dash Distance:", GUILayout.Width(180));
-            float newDashMultiplier = GUILayout.HorizontalSlider(dashDistanceMultiplier, 0.1f, 5.0f, GUILayout.Width(200));
-            GUILayout.Label($"{dashDistanceMultiplier:F1}x", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newDashMultiplier = DrawSliderWithEditButton(
+                "闪避距离倍数 / Dash Distance",
+                dashDistanceMultiplier, 0.1f, 5.0f, "F1", 0, "闪避距离倍数"
+            );
 
             if (newDashMultiplier != dashDistanceMultiplier)
             {
@@ -1105,11 +1410,10 @@ namespace DashPlus
             }
 
             // 体力消耗
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("体力消耗 / Stamina Cost:", GUILayout.Width(180));
-            float newStamina = GUILayout.HorizontalSlider(staminaCost, 0f, 50f, GUILayout.Width(200));
-            GUILayout.Label($"{staminaCost:F1}", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newStamina = DrawSliderWithEditButton(
+                "体力消耗 / Stamina Cost",
+                staminaCost, 0f, 50f, "F1", 1, "体力消耗"
+            );
 
             if (newStamina != staminaCost)
             {
@@ -1118,11 +1422,10 @@ namespace DashPlus
             }
 
             // 冷却时间
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("冷却时间(秒) / Cooldown (s):", GUILayout.Width(180));
-            float newCoolTime = GUILayout.HorizontalSlider(coolTime, 0f, 5f, GUILayout.Width(200));
-            GUILayout.Label($"{coolTime:F2}s", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newCoolTime = DrawSliderWithEditButton(
+                "冷却时间(秒) / Cooldown (s)",
+                coolTime, 0f, 5f, "F2", 2, "冷却时间"
+            );
 
             if (newCoolTime != coolTime)
             {
@@ -1143,17 +1446,15 @@ namespace DashPlus
             }
 
             // 换弹加速百分比滑动条
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("换弹加速 / Reload Speed:", GUILayout.Width(180));
-
             // 根据闪避换弹开关状态设置GUI是否可用
             GUI.enabled = enableDashReload;
 
-            float newPercentage = GUILayout.HorizontalSlider(dashReloadPercentage, 0f, 100f, GUILayout.Width(200));
-            GUILayout.Label($"{dashReloadPercentage}%", GUILayout.Width(50));
-            GUI.enabled = true; // 恢复GUI状态
+            float newPercentage = DrawSliderWithEditButton(
+                "换弹加速 / Reload Speed",
+                dashReloadPercentage, 0f, 100f, "F0", 3, "换弹加速百分比"
+            );
 
-            GUILayout.EndHorizontal();
+            GUI.enabled = true; // 恢复GUI状态
 
             if (Math.Abs(newPercentage - dashReloadPercentage) > 0.5f)
             {
@@ -1184,11 +1485,10 @@ namespace DashPlus
             GUILayout.Space(5);
 
             // 步行速度倍数
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("步行速度倍数 / Walk Speed:", GUILayout.Width(180));
-            float newWalkMultiplier = GUILayout.HorizontalSlider(walkSpeedMultiplier, 1f, 5.0f, GUILayout.Width(200));
-            GUILayout.Label($"{walkSpeedMultiplier:F1}x", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newWalkMultiplier = DrawSliderWithEditButton(
+                "步行速度倍数 / Walk Speed",
+                walkSpeedMultiplier, 1f, 5.0f, "F1", 4, "步行速度倍数"
+            );
 
             if (newWalkMultiplier != walkSpeedMultiplier)
             {
@@ -1197,11 +1497,10 @@ namespace DashPlus
             }
 
             // 奔跑速度倍数
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("奔跑速度倍数 / Run Speed:", GUILayout.Width(180));
-            float newRunMultiplier = GUILayout.HorizontalSlider(runSpeedMultiplier, 1f, 5.0f, GUILayout.Width(200));
-            GUILayout.Label($"{runSpeedMultiplier:F1}x", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newRunMultiplier = DrawSliderWithEditButton(
+                "奔跑速度倍数 / Run Speed",
+                runSpeedMultiplier, 1f, 5.0f, "F1", 5, "奔跑速度倍数"
+            );
 
             if (newRunMultiplier != runSpeedMultiplier)
             {
@@ -1210,11 +1509,10 @@ namespace DashPlus
             }
 
             // 体力消耗率倍数
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("体力消耗率倍数 / Stamina Drain:", GUILayout.Width(180));
-            float newDrainMultiplier = GUILayout.HorizontalSlider(staminaDrainRateMultiplier, 0, 5.0f, GUILayout.Width(200));
-            GUILayout.Label($"{staminaDrainRateMultiplier:F1}x", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newDrainMultiplier = DrawSliderWithEditButton(
+                "体力消耗率倍数 / Stamina Drain",
+                staminaDrainRateMultiplier, 0, 5.0f, "F1", 6, "体力消耗率倍数"
+            );
 
             if (newDrainMultiplier != staminaDrainRateMultiplier)
             {
@@ -1223,11 +1521,10 @@ namespace DashPlus
             }
 
             // 体力恢复率倍数
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("体力恢复率倍数 / Stamina Recover:", GUILayout.Width(180));
-            float newRecoverMultiplier = GUILayout.HorizontalSlider(staminaRecoverRateMultiplier, 1f, 5.0f, GUILayout.Width(200));
-            GUILayout.Label($"{staminaRecoverRateMultiplier:F1}x", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newRecoverMultiplier = DrawSliderWithEditButton(
+                "体力恢复率倍数 / Stamina Recover",
+                staminaRecoverRateMultiplier, 1f, 5.0f, "F1", 7, "体力恢复率倍数"
+            );
 
             if (newRecoverMultiplier != staminaRecoverRateMultiplier)
             {
@@ -1236,11 +1533,10 @@ namespace DashPlus
             }
 
             // 体力恢复延迟倍数
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("体力恢复延迟倍数 / Recover Delay:", GUILayout.Width(180));
-            float newRecoverTimeMultiplier = GUILayout.HorizontalSlider(staminaRecoverTimeMultiplier, 0, 5.0f, GUILayout.Width(200));
-            GUILayout.Label($"{staminaRecoverTimeMultiplier:F1}x", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newRecoverTimeMultiplier = DrawSliderWithEditButton(
+                "体力恢复延迟倍数 / Recover Delay",
+                staminaRecoverTimeMultiplier, 0, 5.0f, "F1", 8, "体力恢复延迟倍数"
+            );
 
             if (newRecoverTimeMultiplier != staminaRecoverTimeMultiplier)
             {
@@ -1317,11 +1613,10 @@ namespace DashPlus
 
             // 视野倍数滑块 - 仅在启用自定义视野时可用
             GUI.enabled = enableCustomFOV; // 禁用状态下变灰
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("视野倍数 / FOV Multiplier:", GUILayout.Width(200));
-            float newFOVMultiplier = GUILayout.HorizontalSlider(fovMultiplier, 0.2f, 3.0f, GUILayout.Width(200));
-            GUILayout.Label($"{fovMultiplier:F1}x", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newFOVMultiplier = DrawSliderWithEditButton(
+                "视野倍数 / FOV Multiplier",
+                fovMultiplier, 0.2f, 3.0f, "F1", 9, "视野倍数"
+            );
             GUI.enabled = true; // 恢复启用状态
 
             if (newFOVMultiplier != fovMultiplier && enableCustomFOV)
@@ -1360,24 +1655,22 @@ namespace DashPlus
 
             // 回血比例滑块 - 仅在启用击杀回血时可用
             GUI.enabled = enableKillHeal;
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("回血比例 / Heal Percentage:", GUILayout.Width(200));
-            float newHealPercentage = GUILayout.HorizontalSlider(healPercentage, 0.1f, 100.0f, GUILayout.Width(200));
-            GUILayout.Label($"{healPercentage:F1}%", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newHealPercentage = DrawSliderWithEditButton(
+                "回血比例 / Heal Percentage",
+                healPercentage, 0, 100, "F0", 10, "回血比例"
+            );
 
-            if (Math.Abs(newHealPercentage - healPercentage) > 0.1f)
+            if (Math.Abs(newHealPercentage - healPercentage) > 0.5f)
             {
-                healPercentage = newHealPercentage;
-                LogMessage($"回血比例调整为: {healPercentage:F1}%");
+                healPercentage = (int)newHealPercentage;
+                LogMessage($"回血比例调整为: {healPercentage}%");
             }
 
             // 最大回血量滑块
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("最大回血量 / Max Heal Amount:", GUILayout.Width(200));
-            float newMaxHeal = GUILayout.HorizontalSlider(maxHealAmount, 1f, 200f, GUILayout.Width(200));
-            GUILayout.Label($"{maxHealAmount:F1}", GUILayout.Width(50));
-            GUILayout.EndHorizontal();
+            float newMaxHeal = DrawSliderWithEditButton(
+                "最大回血量 / Max Heal Amount",
+                maxHealAmount, 1f, 200f, "F1", 11, "最大回血量"
+            );
 
             if (Math.Abs(newMaxHeal - maxHealAmount) > 0.5f)
             {
@@ -1434,7 +1727,7 @@ namespace DashPlus
 
             // 重置击杀回血参数
             enableKillHeal = false;
-            healPercentage = 5.0f;
+            healPercentage = 5;
             maxHealAmount = 50.0f;
 
             SaveSettings();
@@ -1928,7 +2221,7 @@ namespace DashPlus
             }
 
             // 计算回血量
-            float healAmount = killedHealth.MaxHealth * (healPercentage / 100f);
+            float healAmount = killedHealth.MaxHealth * (healPercentage / 100.0f);
             healAmount = Mathf.Min(healAmount, maxHealAmount);
 
             if (healAmount <= 0)

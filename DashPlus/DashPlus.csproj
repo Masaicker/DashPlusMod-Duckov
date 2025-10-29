@@ -37,6 +37,27 @@
       <Reference Include="UnityEngine.InputLegacyModule">
         <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
       </Reference>
+      <Reference Include="UnityEngine.UI">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.UI.dll</HintPath>
+      </Reference>
+      <Reference Include="UnityEngine.UIElementsModule">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.UIElementsModule.dll</HintPath>
+      </Reference>
+      <Reference Include="UnityEngine.UIModule">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      </Reference>
+      <Reference Include="UnityEngine.TextRenderingModule">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      </Reference>
+      <Reference Include="Unity.TextMeshPro">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      </Reference>
+      <Reference Include="AstarPathfindingProject">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\AstarPathfindingProject.dll</HintPath>
+      </Reference>
+      <Reference Include="SodaLocalization">
+        <HintPath>E:\Steam\steamapps\common\Escape from Duckov\Duckov_Data\Managed\SodaLocalization.dll</HintPath>
+      </Reference>
     </ItemGroup>
 
 </Project>
