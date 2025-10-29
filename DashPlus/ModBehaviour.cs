@@ -170,6 +170,23 @@ namespace DashPlus
             {
                 ToggleGUI();
             }
+            
+            // 每帧检测ESC键状态，拦截原生ESC菜单
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                if (showGUI)
+                {
+                    // 如果游戏暂停菜单已经显示，先关闭它
+                    if (PauseMenu.Instance != null && PauseMenu.Instance.Shown)
+                    {
+                        PauseMenu.Hide();
+                        LogMessage("ESC拦截：关闭游戏暂停菜单");
+                    } 
+                    ToggleGUI();
+                    LogMessage("ESC拦截：关闭主GUI面板");
+                }
+                // 否则让ESC键正常工作，显示游戏原生菜单
+            }
 
             // 检查快捷键：Ctrl+滚轮调整FOV
             if (Input.GetKey(KeyCode.LeftControl) && enableCustomFOV)
@@ -898,6 +915,10 @@ namespace DashPlus
 
         void DoWindow(int windowId)
         {
+            // 设置焦点到主窗口，确保ESC键能被正确处理
+            GUI.SetNextControlName("DashPlusMainWindow");
+            GUI.FocusControl("DashPlusMainWindow");
+
             // 右上角关闭按钮
             if (GUI.Button(new Rect(guiRect.width - 25, 5, 20, 20), "×"))
             {
@@ -969,8 +990,7 @@ namespace DashPlus
 
             GUILayout.Space(5);
             GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
-            GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
-
+            GUILayout.Space(5);
             GUILayout.EndVertical();
 
             // 自动调整窗口高度
@@ -1241,6 +1261,7 @@ namespace DashPlus
 
                 if (Event.current.keyCode == KeyCode.Escape)
                 {
+                    StartCoroutine(HandleESCKeyInterception());
                     CancelInputDialog();
                     Event.current.Use();
                     return;
@@ -2252,6 +2273,16 @@ namespace DashPlus
             if (enableLogging)
             {
                 Debug.Log($"[DashPlus] {message}");
+            }
+        }
+
+        private IEnumerator HandleESCKeyInterception()
+        {
+            yield return null;
+            if (PauseMenu.Instance != null && PauseMenu.Instance.Shown)
+            {
+                PauseMenu.Hide();
+                LogMessage("ESC拦截：关闭游戏暂停菜单");
             }
         }
     }
