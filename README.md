@@ -1,126 +1,110 @@
 # DashPlus 闪避增强
 
-一个针对 "Escape from Duckov" 的Unity Mod，提供游戏参数的实时调节功能。未来可能会添加更多优化手感或数据调整的内容。
+"Escape from Duckov" 游戏Mod，提供多种游戏参数的实时调节功能。
 
 ---
 
-## 中文介绍
+## 功能介绍
 
-### 功能特性
+### 闪避参数
+- **闪避距离倍数**: 0.1x-5.0x
+- **体力消耗**: 0-50
+- **冷却时间**: 0-5秒
+- **闪避换弹**: 闪避时可记录换弹意图，结束后快速换弹
+- **射击打断换弹**: 换弹时按开火键可中断
 
-#### 闪避参数
-- 闪避距离倍数调节 (0.1x-5.0x)
-- 体力消耗设置 (0-50)
-- 冷却时间调整 (0-5秒)
-- 闪避换弹开关 (开启/禁用闪避时自动换弹)
-- 射击打断换弹 (换弹时按开火键可中断换弹)
+### 奔跑参数
+- **步行速度倍数**: 1.0x-5.0x
+- **奔跑速度倍数**: 1.0x-5.0x
+- **体力消耗率倍数**: 0x-5.0x
+- **体力恢复率倍数**: 1.0x-5.0x
+- **体力恢复延迟倍数**: 0x-5.0x
 
-#### 奔跑参数
-- 步行速度倍数调节 (1.0x-5.0x)
-- 奔跑速度倍数调节 (1.0x-5.0x)
-- 体力消耗率倍数调节 (0x-5.0x)
-- 体力恢复率倍数调节 (1.0x-5.0x)
-- 体力恢复延迟倍数调节 (0x-5.0x)
+### 移动手感
+- **禁用移动惯性**: 角色移动没有打滑效果
 
-#### 移动手感参数
-- 惯性控制开关 (禁用/启用移动惯性效果)
+### 负重设置
+- **无限负重**: 无视重量限制
 
-#### 负重设置参数
-- 无限负重开关 (无视重量限制，可携带任意重量的物品)
+### 视野设置
+- **自定义视野开关**: 启用/禁用自定义FOV
+- **视野倍数**: 0.2x-3.0x
+- **快捷调整**: Ctrl+鼠标滚轮调整视野
 
-#### 视野设置参数
-- 自定义视野开关 (启用/禁用自定义FOV)
-- 视野倍数调节 (0.2x-3.0x)
-- 快捷调整：当自定义视野开启时，可使用 Ctrl+鼠标滚轮 进行平滑视野缩放
+### 击杀回血
+- **击杀回血开关**: 击杀敌人时回血
+- **回血比例**: 0-100%（敌人最大血量的百分比）
+- **最大回血量**: 1-200 HP
 
-#### 击杀回血参数
-- 击杀回血开关 (启用/禁用击杀敌人时回血)
-- 回血比例调节 (0.1%-100%，基于敌人最大血量的百分比)
-- 最大回血量设置 (1-200 HP，单次击杀回血上限)
+## 使用方法
 
-#### 使用方法
-1. **安装Mod**:
-   - 手动安装：将DashPlus.dll放入游戏Mods文件夹
-   - Steam创意工坊：直接订阅该MOD
+1. **安装Mod**: 将DashPlus.dll放入游戏Mods文件夹，或通过Steam创意工坊订阅
 2. **启动游戏**: 运行游戏并加载存档
-3. **打开控制面板**: 按 `Ctrl+G` 打开GUI控制面板
-4. **调节参数**: 使用滑块实时调整各项参数
-5. **设置保存**: 所有设置自动保存，下次启动时生效
+3. **打开控制面板**: 按 `Ctrl+G` 打开设置界面
+4. **调节参数**: 使用滑块调整各项参数
+5. **精确编辑**: 点击参数旁的数字可精确输入数值
+6. **快速重置**: 悬浮在参数上按 `R` 键重置为默认值
 
-> **建议**: 在ESC暂停时使用控制面板，以便调整参数
+### 界面功能
+- **多标签页**: 闪避、奔跑、视野、回血、其他设置
+- **颜色标识**: 白色显示默认值，绿色显示修改值
+- **设置保存**: 关闭界面时自动保存
+- **批量重置**: 底部按钮可恢复所有默认设置
 
-#### 技术特性
-- ✅ 实时参数修改，无需重启游戏
-- ✅ 设置持久化保存到PlayerPrefs
-- ✅ Mod卸载时自动恢复原始值
-- ✅ 完整的中英文双语界面
-- ✅ 详细的调试日志输出
-- ✅ 安全的参数边界检查
-- ✅ 惯性控制系统（基于加速度调节实现）
-- ✅ 无限负重系统（通过修改MaxWeight属性实现）
-- ✅ 视野控制系统（通过修改FOV参数实现）
-- ✅ 闪避换弹系统（底层绕过动作系统，固定时间快速换弹）
-- ✅ 击杀回血系统（基于Health.OnDead事件监听）
+> **提示**: 建议在游戏暂停时（ESC键）使用控制面板
 
 ---
 
-## English Introduction
+## English Version
 
 ### Features
 
 #### Dash Parameters
-- Dash Distance Control (0.1x-5.0x)
-- Stamina Cost Settings (0-50)
-- Cooldown Time Adjustment (0-5 seconds)
-- Dash Reload Toggle (Enable/Disable auto-reload during dash)
-- Shoot Interrupt Reload (Press fire key during reload to interrupt)
+- **Dash Distance**: 0.1x-5.0x
+- **Stamina Cost**: 0-50
+- **Cooldown**: 0-5 seconds
+- **Dash Reload**: Records reload intent during dash for quick reload after
+- **Shoot Interrupt**: Press fire key to interrupt reload
 
 #### Run Parameters
-- Walk Speed Control (1.0x-5.0x)
-- Run Speed Control (1.0x-5.0x)
-- Stamina Drain Rate Control (0x-5.0x)
-- Stamina Recover Rate Control (1.0x-5.0x)
-- Stamina Recover Delay Control (0x-5.0x)
+- **Walk Speed**: 1.0x-5.0x
+- **Run Speed**: 1.0x-5.0x
+- **Stamina Drain Rate**: 0x-5.0x
+- **Stamina Recovery Rate**: 1.0x-5.0x
+- **Stamina Recovery Delay**: 0x-5.0x
 
-#### Movement Feel Parameters
-- Inertia Control Toggle (Disable/Enable movement inertia effects)
+#### Movement Feel
+- **Disable Movement Inertia**: Removes sliding effect when moving
 
-#### Weight Settings Parameters
-- Infinite Weight Toggle (Ignore weight restrictions, carry items of any weight)
+#### Weight Settings
+- **Infinite Weight**: Ignore weight restrictions
 
-#### FOV Settings Parameters
-- Custom FOV Toggle (Enable/Disable custom field of view)
-- FOV Multiplier Adjustment (0.2x-3.0x)
-- Quick Adjustment: When custom FOV is enabled, use Ctrl+Mouse Wheel for smooth FOV scaling
+#### FOV Settings
+- **Custom FOV Toggle**: Enable/disable custom field of view
+- **FOV Multiplier**: 0.2x-3.0x
+- **Quick Adjustment**: Ctrl+Mouse wheel to adjust FOV
 
-#### Kill Heal Parameters
-- Kill Heal Toggle (Enable/Disable health restoration when killing enemies)
-- Heal Percentage Adjustment (0.1%-100%, based on enemy max health percentage)
-- Max Heal Amount Setting (1-200 HP, maximum heal per kill)
+#### Kill Heal
+- **Kill Heal Toggle**: Restore health when killing enemies
+- **Heal Percentage**: 0-100% (percentage of enemy max health)
+- **Max Heal Amount**: 1-200 HP
 
-#### Usage
-1. **Install Mod**:
-   - Manual Installation: Place DashPlus.dll in the game Mods folder
-   - Steam Workshop: Subscribe to the MOD directly
-2. **Launch Game**: Run the game and load your save
-3. **Open Control Panel**: Press `Ctrl+G` to open the GUI control panel
-4. **Adjust Parameters**: Use sliders to adjust parameters in real-time
-5. **Settings Save**: All settings are automatically saved and persist between sessions
+## Usage
 
-> **Recommended**: Use the control panel while paused (ESC) for parameter adjustment
+1. **Install Mod**: Place DashPlus.dll in game Mods folder or subscribe via Steam Workshop
+2. **Launch Game**: Start game and load save
+3. **Open Control Panel**: Press `Ctrl+G` to open settings interface
+4. **Adjust Parameters**: Use sliders to adjust various parameters
+5. **Precise Editing**: Click parameter values to input exact numbers
+6. **Quick Reset**: Hover over parameter and press `R` key to reset to default
 
-#### Technical Features
-- ✅ Real-time parameter modification without game restart
-- ✅ Persistent settings saved to PlayerPrefs
-- ✅ Automatic restore of original values when mod is unloaded
-- ✅ Complete bilingual (Chinese/English) interface
-- ✅ Detailed debug logging output
-- ✅ Safe parameter boundary checking
-- ✅ Inertia control system (implemented through acceleration adjustment)
-- ✅ Infinite weight system (implemented by modifying MaxWeight property)
-- ✅ FOV control system (modifies FOV parameters)
-- ✅ Dash reload system (bypasses action system for instant fixed-time reload)
-- ✅ Kill heal system (based on Health.OnDead event listening)
+### Interface Features
+- **Multi-tabs**: Dash, Run, FOV, Heal, Others
+- **Color Coding**: White for default values, green for modified values
+- **Auto-save**: Settings saved automatically when closing interface
+- **Batch Reset**: Bottom button to restore all defaults
+
+> **Tip**: Recommended to use control panel while game is paused (ESC key)
 
 ---
 
