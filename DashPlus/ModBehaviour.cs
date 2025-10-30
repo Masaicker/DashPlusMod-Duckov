@@ -74,6 +74,10 @@ namespace DashPlus
         private Vector2 dragOffset = Vector2.zero; // 拖动偏移量
         private Texture2D? whiteTexture; // 用于半透明背景的白色纹理
 
+        // 防止R键重复触发的静态变量
+        private static bool rKeyPressed = false;
+        private static int lastResetFrame = -1;
+
         private bool hasOriginalValues;
         private AnimationCurve? originalSpeedCurve;
         private float originalStaminaCost;
@@ -105,6 +109,20 @@ namespace DashPlus
         // 标签页控制
         private int selectedTab = 0; // 0: 闪避, 1: 奔跑, 2: 视野, 3: 回血, 4: 其他设置
         private readonly string[] tabNames = { "闪避 / Dash", "奔跑 / Run", "视野 / FOV", "回血 / Heal", "其他 / Others" };
+
+        // 参数默认值常量
+        private static readonly float DEFAULT_DASH_DISTANCE_MULTIPLIER = 1.0f;
+        private static readonly float DEFAULT_STAMINA_COST = 10f;
+        private static readonly float DEFAULT_COOL_TIME = 0.5f;
+        private static readonly int DEFAULT_DASH_RELOAD_PERCENTAGE = 0;
+        private static readonly float DEFAULT_WALK_SPEED_MULTIPLIER = 1.0f;
+        private static readonly float DEFAULT_RUN_SPEED_MULTIPLIER = 1.0f;
+        private static readonly float DEFAULT_STAMINA_DRAIN_RATE_MULTIPLIER = 1.0f;
+        private static readonly float DEFAULT_STAMINA_RECOVER_RATE_MULTIPLIER = 1.0f;
+        private static readonly float DEFAULT_STAMINA_RECOVER_TIME_MULTIPLIER = 1.0f;
+        private static readonly float DEFAULT_FOV_MULTIPLIER = 1.0f;
+        private static readonly int DEFAULT_HEAL_PERCENTAGE = 5;
+        private static readonly float DEFAULT_MAX_HEAL_AMOUNT = 50.0f;
 
         // FOV滚轮调整相关
         private bool isScrollingFOV = false;
@@ -183,7 +201,6 @@ namespace DashPlus
                         LogMessage("ESC拦截：关闭游戏暂停菜单");
                     } 
                     ToggleGUI();
-                    LogMessage("ESC拦截：关闭主GUI面板");
                 }
                 // 否则让ESC键正常工作，显示游戏原生菜单
             }
@@ -990,6 +1007,8 @@ namespace DashPlus
 
             GUILayout.Space(5);
             GUILayout.Label("Ctrl+G 隐藏/显示此面板 / Hide/Show Panel", GUI.skin.box);
+            GUILayout.Label("点击滑动条右侧数字精确编辑 / Click slider value to edit precisely", GUI.skin.box);
+            GUILayout.Label("悬浮滑动条上按R重置该参数 / Hover on slider and press R to reset", GUI.skin.box);
             GUILayout.Space(5);
             GUILayout.EndVertical();
 
@@ -1161,7 +1180,31 @@ namespace DashPlus
             GUILayout.Label(label, GUILayout.Width(180));
 
             // 滑动条（恢复原始宽度）
-            float newValue = GUILayout.HorizontalSlider(value, minValue, maxValue, GUILayout.Width(200));
+            Rect sliderRect = GUILayoutUtility.GetRect(200, 20);
+            float newValue = GUI.HorizontalSlider(sliderRect, value, minValue, maxValue);
+
+            // 检测鼠标悬停+R键重置 - 使用静态变量防止重复触发
+            bool shouldResetToF1Default = false;
+            // 只有在GUI.enabled为true（滑动条可用）时才检测R键重置
+            // 并且使用静态变量确保每帧只触发一次
+            int currentFrame = Time.frameCount;
+            if (GUI.enabled && sliderRect.Contains(Event.current.mousePosition) &&
+                Input.GetKeyDown(KeyCode.R) && !rKeyPressed && currentFrame != lastResetFrame)
+            {
+                if (parameterIndex >= 0)
+                {
+                    ResetSingleParameter(parameterIndex, parameterName);
+                    shouldResetToF1Default = true;
+                    rKeyPressed = true;
+                    lastResetFrame = currentFrame;
+                }
+            }
+
+            // 在R键释放时重置状态
+            if (Input.GetKeyUp(KeyCode.R))
+            {
+                rKeyPressed = false;
+            }
 
             // 值显示（支持点击）- 为整数参数添加%符号
             string valueText;
@@ -1184,7 +1227,8 @@ namespace DashPlus
                 ShowInputDialog(parameterName, label, value, minValue, maxValue, parameterIndex);
             }
 
-            return newValue;
+            // 如果需要重置到默认值，返回默认值而不是newValue
+            return shouldResetToF1Default ? GetDefaultValue(parameterIndex) : newValue;
         }
 
         /// <summary>
@@ -1411,6 +1455,57 @@ namespace DashPlus
 
             // 应用修改
             ApplyModIfExists();
+        }
+
+        /// <summary>
+        /// 重置单个参数为默认值
+        /// </summary>
+        /// <param name="parameterIndex">参数索引</param>
+        /// <param name="parameterName">参数名称，用于日志输出</param>
+        void ResetSingleParameter(int parameterIndex, string parameterName)
+        {
+            float defaultValue = GetDefaultValue(parameterIndex);
+            UpdateParameterValue(parameterIndex, defaultValue);
+            LogMessage($"参数已重置: {parameterName} = {defaultValue:F1}");
+        }
+
+        /// <summary>
+        /// 获取参数的默认值
+        /// </summary>
+        /// <param name="parameterIndex">参数索引</param>
+        /// <returns>默认值</returns>
+        float GetDefaultValue(int parameterIndex)
+        {
+            switch (parameterIndex)
+            {
+                case 0: // 闪避距离倍数
+                    return DEFAULT_DASH_DISTANCE_MULTIPLIER;
+                case 1: // 体力消耗
+                    return DEFAULT_STAMINA_COST;
+                case 2: // 冷却时间
+                    return DEFAULT_COOL_TIME;
+                case 3: // 换弹加速百分比
+                    return DEFAULT_DASH_RELOAD_PERCENTAGE;
+                case 4: // 步行速度倍数
+                    return DEFAULT_WALK_SPEED_MULTIPLIER;
+                case 5: // 奔跑速度倍数
+                    return DEFAULT_RUN_SPEED_MULTIPLIER;
+                case 6: // 体力消耗率倍数
+                    return DEFAULT_STAMINA_DRAIN_RATE_MULTIPLIER;
+                case 7: // 体力恢复率倍数
+                    return DEFAULT_STAMINA_RECOVER_RATE_MULTIPLIER;
+                case 8: // 体力恢复延迟倍数
+                    return DEFAULT_STAMINA_RECOVER_TIME_MULTIPLIER;
+                case 9: // 视野倍数
+                    return DEFAULT_FOV_MULTIPLIER;
+                case 10: // 回血比例
+                    return DEFAULT_HEAL_PERCENTAGE;
+                case 11: // 最大回血量
+                    return DEFAULT_MAX_HEAL_AMOUNT;
+                default:
+                    LogMessage($"未知的参数索引: {parameterIndex}");
+                    return 0f;
+            }
         }
 
         void DrawDashTab()
