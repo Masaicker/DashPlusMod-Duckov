@@ -1217,7 +1217,37 @@ namespace DashPlus
                 valueText = value.ToString(format);
             }
 
+            // 判断是否为默认值，设置不同颜色
+            bool isDefaultValue = false;
+            if (parameterIndex >= 0)
+            {
+                float defaultValue = GetDefaultValue(parameterIndex);
+                // 对于整数参数，需要转换比较
+                if (parameterIndex == 3 || parameterIndex == 10) // 百分比参数
+                {
+                    isDefaultValue = Math.Abs((int)value - (int)defaultValue) < 0.01f;
+                }
+                else
+                {
+                    isDefaultValue = Math.Abs(value - defaultValue) < 0.001f;
+                }
+            }
+
+            // 根据是否为默认值设置颜色
+            Color originalColor = GUI.color;
+            if (isDefaultValue)
+            {
+                GUI.color = Color.white; // 默认值显示为白色
+            }
+            else
+            {
+                GUI.color = Color.green; // 修改值显示为绿色
+            }
+
             bool isValueClicked = GUILayout.Button(valueText, GUI.skin.label, GUILayout.Width(50));
+
+            // 恢复原始颜色
+            GUI.color = originalColor;
 
             GUILayout.EndHorizontal();
 
@@ -1458,6 +1488,66 @@ namespace DashPlus
         }
 
         /// <summary>
+        /// 获取布尔值的默认值
+        /// </summary>
+        /// <param name="parameterName">参数名称</param>
+        /// <returns>默认值</returns>
+        bool GetBoolDefaultValue(string parameterName)
+        {
+            switch (parameterName)
+            {
+                case "闪避换弹": return false;
+                case "开火打断换弹": return false;
+                case "禁用移动惯性": return false;
+                case "无限负重": return false;
+                case "自定义视野": return false;
+                case "击杀回血": return false;
+                case "调试日志": return false;
+                default: return false;
+            }
+        }
+
+        /// <summary>
+        /// 绘制带颜色的布尔值开关
+        /// </summary>
+        /// <param name="currentValue">当前值</param>
+        /// <param name="parameterName">参数名称</param>
+        /// <param name="options">GUILayout选项</param>
+        /// <returns>新的开关值</returns>
+        bool DrawColoredToggle(bool currentValue, string parameterName, params GUILayoutOption[] options)
+        {
+            bool defaultValue = GetBoolDefaultValue(parameterName);
+
+            // 调试日志特殊处理，不改变颜色
+            if (parameterName == "调试日志")
+            {
+                return GUILayout.Toggle(currentValue, currentValue ? "开启 / ON" : "关闭 / OFF", options);
+            }
+
+            // 使用自定义样式创建带颜色的开关
+            string toggleText = currentValue ? "开启 / ON" : "关闭 / OFF";
+
+            // 保存原始颜色
+            Color originalColor = GUI.color;
+            if (currentValue == defaultValue)
+            {
+                GUI.color = Color.white; // 默认值显示为白色
+            }
+            else
+            {
+                GUI.color = Color.green; // 修改值显示为绿色
+            }
+
+            // 绘制带颜色的开关
+            bool newValue = GUILayout.Toggle(currentValue, toggleText, options);
+
+            // 恢复颜色
+            GUI.color = originalColor;
+
+            return newValue;
+        }
+
+        /// <summary>
         /// 重置单个参数为默认值
         /// </summary>
         /// <param name="parameterIndex">参数索引</param>
@@ -1552,7 +1642,7 @@ namespace DashPlus
             // 闪避换弹开关
             GUILayout.BeginHorizontal();
             GUILayout.Label("闪避换弹 / Dash Reload:", GUILayout.Width(180));
-            bool newDashReload = GUILayout.Toggle(enableDashReload, enableDashReload ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            bool newDashReload = DrawColoredToggle(enableDashReload, "闪避换弹", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
             if (newDashReload != enableDashReload)
@@ -1585,7 +1675,7 @@ namespace DashPlus
             // 射击打断换弹开关 UI上使用"开火"，代码内部使用"射击"
             GUILayout.BeginHorizontal();
             GUILayout.Label("开火打断换弹 / Shoot Interrupt:", GUILayout.Width(180));
-            bool newShootInterrupt = GUILayout.Toggle(enableShootInterruptReload, enableShootInterruptReload ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            bool newShootInterrupt = DrawColoredToggle(enableShootInterruptReload, "开火打断换弹", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
             if (newShootInterrupt != enableShootInterruptReload)
@@ -1669,7 +1759,7 @@ namespace DashPlus
             // 惯性开关
             GUILayout.BeginHorizontal();
             GUILayout.Label("禁用移动惯性 / Disable Inertia:", GUILayout.Width(200));
-            bool newDisableInertia = GUILayout.Toggle(disableMovementInertia, disableMovementInertia ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            bool newDisableInertia = DrawColoredToggle(disableMovementInertia, "禁用移动惯性", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
             if (newDisableInertia != disableMovementInertia)
@@ -1681,7 +1771,7 @@ namespace DashPlus
             // 无限负重开关
             GUILayout.BeginHorizontal();
             GUILayout.Label("无限负重 / Infinite Weight:", GUILayout.Width(200));
-            bool newInfiniteWeight = GUILayout.Toggle(enableInfiniteWeight, enableInfiniteWeight ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            bool newInfiniteWeight = DrawColoredToggle(enableInfiniteWeight, "无限负重", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
             if (newInfiniteWeight != enableInfiniteWeight)
@@ -1698,7 +1788,7 @@ namespace DashPlus
             // 日志开关
             GUILayout.BeginHorizontal();
             GUILayout.Label("调试日志 / Debug Logging:", GUILayout.Width(200));
-            bool newLogging = GUILayout.Toggle(enableLogging, enableLogging ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            bool newLogging = DrawColoredToggle(enableLogging, "调试日志", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
             if (newLogging != enableLogging)
@@ -1716,7 +1806,7 @@ namespace DashPlus
             // 自定义视野开关
             GUILayout.BeginHorizontal();
             GUILayout.Label("自定义视野 / Custom FOV:", GUILayout.Width(200));
-            bool newCustomFOV = GUILayout.Toggle(enableCustomFOV, enableCustomFOV ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            bool newCustomFOV = DrawColoredToggle(enableCustomFOV, "自定义视野", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
             if (newCustomFOV != enableCustomFOV)
@@ -1758,7 +1848,7 @@ namespace DashPlus
             // 击杀回血开关
             GUILayout.BeginHorizontal();
             GUILayout.Label("启用击杀回血 / Enable Kill Heal:", GUILayout.Width(200));
-            bool newKillHeal = GUILayout.Toggle(enableKillHeal, enableKillHeal ? "开启 / ON" : "关闭 / OFF", GUILayout.Width(120), GUILayout.Height(25));
+            bool newKillHeal = DrawColoredToggle(enableKillHeal, "击杀回血", GUILayout.Width(120), GUILayout.Height(25));
             GUILayout.EndHorizontal();
 
             if (newKillHeal != enableKillHeal)
