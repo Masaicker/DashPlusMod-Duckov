@@ -241,6 +241,12 @@ namespace DashPlus
                 LogMessage($"FOV倍数调整为: {targetFOVValue:F1}x");
             }
 
+            // 检查快捷键：Ctrl+鼠标中键 还原默认FOV
+            if (Input.GetKeyDown(KeyCode.Mouse2) && Input.GetKey(KeyCode.LeftControl) && enableCustomFOV)
+            {
+                ResetFOVToDefault();
+            }
+
             // FOV平滑过渡系统 - 每帧都执行平滑更新
             if (needsFOVUpdate)
             {
@@ -818,6 +824,27 @@ namespace DashPlus
             gameCamera.adsFOV = smoothAdsFOV;
         }
 
+        /// <summary>
+        /// 还原FOV到默认值
+        /// </summary>
+        void ResetFOVToDefault()
+        {
+            if (!EnsureGUIExists())
+            {
+                return;
+            }
+
+            // 设置为目标默认值
+            targetFOVValue = DEFAULT_FOV_MULTIPLIER;
+            fovMultiplier = DEFAULT_FOV_MULTIPLIER;
+            needsFOVUpdate = true;
+
+            // 保存设置
+            SaveSettings();
+
+            LogMessage($"FOV已还原默认值: {DEFAULT_FOV_MULTIPLIER:F1}x");
+        }
+
         void LoadSettings()
         {
             // 闪避参数
@@ -1056,9 +1083,6 @@ namespace DashPlus
                 // 创建GUI面板
                 CreateGUIPanel();
 
-                // 应用Mod设置
-                //ApplyModIfExists();
-
                 LogMessage("通过备用机制成功创建GUI面板");
                 return true;
             }
@@ -1183,6 +1207,9 @@ namespace DashPlus
             Rect sliderRect = GUILayoutUtility.GetRect(200, 20);
             float newValue = GUI.HorizontalSlider(sliderRect, value, minValue, maxValue);
 
+            // 添加间距
+            GUILayout.Space(5);
+
             // 检测鼠标悬停+R键重置 - 使用静态变量防止重复触发
             bool shouldResetToF1Default = false;
             // 只有在GUI.enabled为true（滑动条可用）时才检测R键重置
@@ -1233,6 +1260,11 @@ namespace DashPlus
                 }
             }
 
+            // 获取按钮矩形区域，与滑动条对齐
+            Rect buttonRect = GUILayoutUtility.GetRect(25, 20);
+            // 向上偏移2像素
+            buttonRect.y -= 2;
+
             // 根据是否为默认值设置颜色
             Color originalColor = GUI.color;
             if (isDefaultValue)
@@ -1244,7 +1276,8 @@ namespace DashPlus
                 GUI.color = Color.green; // 修改值显示为绿色
             }
 
-            bool isValueClicked = GUILayout.Button(valueText, GUI.skin.label, GUILayout.Width(50));
+            // 手动绘制按钮，精确控制位置（无背景）
+            bool isValueClicked = GUI.Button(buttonRect, valueText, GUI.skin.label);
 
             // 恢复原始颜色
             GUI.color = originalColor;
@@ -1835,8 +1868,8 @@ namespace DashPlus
 
             // 操作提示 - 根据自定义视野状态决定是否变灰
             GUI.enabled = enableCustomFOV; // 启用状态与自定义视野开关一致
-            GUILayout.Label("提示：可使用 Ctrl+鼠标滚轮 调整视野", GUI.skin.box);
-            GUILayout.Label("Tip: Use Ctrl+Mouse Wheel to adjust FOV", GUI.skin.box);
+            GUILayout.Label("提示：Ctrl+鼠标滚轮调整视野，Ctrl+鼠标中键还原默认", GUI.skin.box);
+            GUILayout.Label("Tip: Ctrl+Mouse Wheel to adjust, Ctrl+Mouse Middle Button to reset", GUI.skin.box);
             GUI.enabled = true; // 恢复启用状态
         }
 
