@@ -30,6 +30,7 @@
 - **自定义视野开关**: 启用/禁用自定义FOV
 - **视野倍数**: 0.2x-3.0x
 - **快捷调整**: Ctrl+鼠标滚轮调整视野
+- **快速重置**: Ctrl+鼠标中键还原默认视野
 
 ### 击杀回血
 - **击杀回血开关**: 击杀敌人时回血
@@ -83,6 +84,7 @@
 - **Custom FOV Toggle**: Enable/disable custom field of view
 - **FOV Multiplier**: 0.2x-3.0x
 - **Quick Adjustment**: Ctrl+Mouse wheel to adjust FOV
+- **Quick Reset**: Ctrl+Mouse middle button to reset to default
 
 #### Kill Heal
 - **Kill Heal Toggle**: Restore health when killing enemies
