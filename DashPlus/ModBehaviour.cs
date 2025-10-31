@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
+using UnityEngine.InputSystem;
 
 namespace DashPlus
 {
@@ -129,6 +130,10 @@ namespace DashPlus
         private float lastScrollTime = 0f;
         private const float SCROLL_END_DELAY = 0.5f; // 滚轮停止后延迟保存时间
 
+        // 滚轮输入拦截系统
+        private bool scrollWheelInputBlocked = false;
+        private InputAction? scrollWheelAction; // 使用object类型，通过反射调用InputAction方法
+
         // FOV平滑过渡系统
         private float currentFOVValue = 1.0f; // 当前实际应用的FOV值
         private float targetFOVValue = 1.0f; // 目标FOV值
@@ -172,7 +177,67 @@ namespace DashPlus
             whiteTexture.SetPixel(0, 0, Color.white);
             whiteTexture.Apply();
 
+            // 初始化滚轮输入拦截系统
+            InitializeScrollWheelInterception();
+
             LoadSettings();
+        }
+
+        /// <summary>
+        /// 初始化滚轮输入拦截系统
+        /// 获取PlayerInput的ScrollWheel输入动作引用，用于后续的输入拦截
+        /// </summary>
+        void InitializeScrollWheelInterception()
+        {
+            try
+            {
+                // 查找PlayerInput组件
+                var playerInput = FindObjectOfType<PlayerInput>();
+                if (playerInput != null)
+                {
+                    var inputActions = playerInput.actions;
+                    scrollWheelAction = inputActions["ScrollWheel"];
+
+                    if (scrollWheelAction != null)
+                    {
+                        LogMessage("滚轮输入拦截系统初始化成功");
+                    }
+                    else
+                    {
+                        LogMessage("警告：无法找到ScrollWheel输入动作");
+                    }
+                }
+                else
+                {
+                    LogMessage("警告：无法找到PlayerInput组件，滚轮拦截功能将不可用");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                LogMessage($"滚轮输入拦截系统初始化失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 清理滚轮输入拦截系统
+        /// 在Mod卸载时重新启用滚轮输入，确保游戏功能正常
+        /// </summary>
+        void CleanupScrollWheelInterception()
+        {
+            try
+            {
+                // 如果滚轮输入仍被拦截，重新启用它
+                if (scrollWheelInputBlocked && scrollWheelAction != null)
+                {
+                    scrollWheelAction.Enable();
+                    scrollWheelInputBlocked = false;
+                    LogMessage("Mod卸载时已清理滚轮输入拦截");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                LogMessage($"清理滚轮输入拦截系统时发生异常: {ex.Message}");
+            }
         }
 
         void Update()
@@ -215,6 +280,15 @@ namespace DashPlus
                     {
                         return;
                     }
+
+                    // 拦截滚轮输入，阻止其他系统响应
+                    if (!scrollWheelInputBlocked && scrollWheelAction != null)
+                    {
+                        scrollWheelAction.Disable();
+                        scrollWheelInputBlocked = true;
+                        LogMessage("滚轮输入已拦截 - 其他系统将无法响应滚轮输入");
+                    }
+
                     // 开始滚动或继续滚动
                     if (!isScrollingFOV)
                     {
@@ -233,12 +307,31 @@ namespace DashPlus
                 }
             }
 
-            // 检查滚轮是否停止，如果停止则保存设置
+            // 检查滚轮是否停止，如果停止则保存设置并重新启用滚轮输入
             if (isScrollingFOV && Time.time - lastScrollTime > SCROLL_END_DELAY)
             {
                 isScrollingFOV = false;
                 SaveSettings();
                 LogMessage($"FOV倍数调整为: {targetFOVValue:F1}x");
+
+                // 重新启用滚轮输入，允许其他系统响应
+                if (scrollWheelInputBlocked && scrollWheelAction != null)
+                {
+                    scrollWheelAction.Enable();
+                    scrollWheelInputBlocked = false;
+                    LogMessage("滚轮输入拦截已解除 - 其他系统可以正常响应滚轮输入");
+                }
+            }
+
+            // 安全检查：如果Ctrl键释放但滚轮输入仍被拦截，立即重新启用
+            if (scrollWheelInputBlocked && !Input.GetKey(KeyCode.LeftControl))
+            {
+                if (scrollWheelAction != null)
+                {
+                    scrollWheelAction.Enable();
+                    scrollWheelInputBlocked = false;
+                    LogMessage("Ctrl键已释放 - 立即解除滚轮输入拦截");
+                }
             }
 
             // 检查快捷键：Ctrl+鼠标中键 还原默认FOV
@@ -1984,6 +2077,9 @@ namespace DashPlus
 
             // 取消订阅击杀事件
             Health.OnDead -= OnEnemyKilled;
+
+            // 清理滚轮输入拦截系统
+            CleanupScrollWheelInterception();
 
             // 如果GUI正在显示，先恢复输入控制
             if (guiPanel != null) InputManager.ActiveInput(guiPanel);
