@@ -71,8 +71,6 @@ namespace DashPlus
         private int currentEditingParameter = -1; // 当前编辑的参数索引
         private string inputDialogText = ""; // 输入框的文本
         private Rect inputDialogRect = new Rect(0, 0, 320, 180); // 对话框位置和大小
-        private bool isDraggingDialog = false; // 是否正在拖动对话框
-        private Vector2 dragOffset = Vector2.zero; // 拖动偏移量
         private Texture2D? whiteTexture; // 用于半透明背景的白色纹理
 
         // 防止R键重复触发的静态变量
@@ -498,7 +496,6 @@ namespace DashPlus
                 inputDialogTitle = "";
                 inputDialogPrompt = "";
                 inputDialogText = "";
-                isDraggingDialog = false;
 
                 //默认先显示准心
                 aimMarkerHidden = true;
@@ -1067,7 +1064,16 @@ namespace DashPlus
             if (showGUI && !showInputDialog)
             {
                 int windowId = 12345;
+                Rect oldRect = guiRect;
                 guiRect = GUI.Window(windowId, guiRect, DoWindow, "DashPlus 增强控制面板");
+
+                // 边界检测：确保窗口始终保持在屏幕可见范围内
+                if (oldRect.x != guiRect.x || oldRect.y != guiRect.y)
+                {
+                    // 窗口位置发生变化，应用边界约束
+                    guiRect.x = Mathf.Clamp(guiRect.x, 0, Screen.width - guiRect.width);
+                    guiRect.y = Mathf.Clamp(guiRect.y, 0, Screen.height - guiRect.height);
+                }
             }
         }
 
@@ -1164,8 +1170,8 @@ namespace DashPlus
                 }
             }
 
-            // 拖动功能
-            GUI.DragWindow();
+            // 拖动功能 - 仅在标题栏区域可拖动，避免与内部控件冲突
+            GUI.DragWindow(new Rect(0, 0, guiRect.width, 30));
         }
 
         /// <summary>
@@ -1461,8 +1467,17 @@ namespace DashPlus
             }
             GUI.color = Color.white;
 
-            // 绘制对话框窗口
+            // 绘制对话框窗口，并应用边界检测
+            Rect oldRect = inputDialogRect;
             inputDialogRect = GUI.Window(99999, inputDialogRect, DrawDialogContent, inputDialogTitle);
+
+            // 边界检测：确保窗口始终保持在屏幕可见范围内
+            if (oldRect.x != inputDialogRect.x || oldRect.y != inputDialogRect.y)
+            {
+                // 窗口位置发生变化，应用边界约束
+                inputDialogRect.x = Mathf.Clamp(inputDialogRect.x, 0, Screen.width - inputDialogRect.width);
+                inputDialogRect.y = Mathf.Clamp(inputDialogRect.y, 0, Screen.height - inputDialogRect.height);
+            }
         }
 
         /// <summary>
@@ -1489,25 +1504,7 @@ namespace DashPlus
                 }
             }
 
-            // 检查是否正在拖动
-            if (Event.current.type == EventType.MouseDrag && isDraggingDialog)
-            {
-                inputDialogRect.x += Event.current.delta.x;
-                inputDialogRect.y += Event.current.delta.y;
-                Event.current.Use();
-            }
-            else if (Event.current.type == EventType.MouseDown &&
-                     new Rect(0, 0, inputDialogRect.width, 20).Contains(Event.current.mousePosition))
-            {
-                isDraggingDialog = true;
-                dragOffset = Event.current.mousePosition;
-                Event.current.Use();
-            }
-            else if (Event.current.type == EventType.MouseUp)
-            {
-                isDraggingDialog = false;
-            }
-
+  
             GUILayout.Space(8);
 
             // 范围提示（作为主要信息显示）
@@ -1542,8 +1539,8 @@ namespace DashPlus
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
-            // 窗口可拖动
-            GUI.DragWindow();
+            // 窗口可拖动 - 仅在标题栏区域可拖动，避免与控件冲突
+            GUI.DragWindow(new Rect(0, 0, inputDialogRect.width, 20));
         }
 
         /// <summary>
@@ -1579,7 +1576,6 @@ namespace DashPlus
             inputDialogTitle = "";
             inputDialogPrompt = "";
             inputDialogText = "";
-            isDraggingDialog = false;
         }
 
         /// <summary>
