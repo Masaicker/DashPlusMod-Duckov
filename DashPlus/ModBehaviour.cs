@@ -160,6 +160,11 @@ namespace DashPlus
         private object? cachedInputManager; // 缓存的inputManager对象
         private const float MIN_INTERRUPT_DELAY = 0.1f; // 最小延迟100ms
 
+        // 准心隐藏系统
+        private bool aimMarkerHidden = true; // 准心是否已隐藏
+        private AimMarker? cachedAimMarker; // 缓存的AimMarker组件
+        private LevelManager? lastKnownLevelManager; // 上次已知的LevelManager
+
         protected override void OnAfterSetup()
         {
             base.OnAfterSetup();
@@ -212,7 +217,7 @@ namespace DashPlus
                     LogMessage("警告：无法找到PlayerInput组件，滚轮拦截功能将不可用");
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 LogMessage($"滚轮输入拦截系统初始化失败: {ex.Message}");
             }
@@ -234,7 +239,7 @@ namespace DashPlus
                     LogMessage("Mod卸载时已清理滚轮输入拦截");
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 LogMessage($"清理滚轮输入拦截系统时发生异常: {ex.Message}");
             }
@@ -393,6 +398,10 @@ namespace DashPlus
                     InputManager.DisableInput(guiPanel);
                     Cursor.lockState = CursorLockMode.None;
                     Cursor.visible = true;
+
+                    // 隐藏准心
+                    HideAimMarker();
+
                     LogMessage("GUI已显示 - 游戏输入已暂停");
                 }
                 catch (Exception ex)
@@ -401,6 +410,8 @@ namespace DashPlus
                     // 发生异常时重置状态
                     showGUI = false;
                     guiPanel?.SetActive(false);
+                    // 恢复准心显示
+                    ShowAimMarker();
                 }
             }
             else
@@ -409,6 +420,10 @@ namespace DashPlus
                 try
                 {
                     InputManager.ActiveInput(guiPanel);
+
+                    // 显示准心
+                    ShowAimMarker();
+
                     LogMessage("GUI已隐藏 - 游戏输入已恢复");
 
                     // 关闭GUI时保存设置
@@ -485,6 +500,10 @@ namespace DashPlus
                 inputDialogText = "";
                 isDraggingDialog = false;
 
+                //默认先显示准心
+                aimMarkerHidden = true;
+                ShowAimMarker();
+                
                 // 保存设置
                 SaveSettings();
                 LogMessage("场景切换时已强制关闭所有GUI界面");
@@ -508,6 +527,8 @@ namespace DashPlus
         {
             cachedInputManager = null;
             hasOriginalValues = false;
+            //默认先显示准心
+            ShowAimMarker();
             LogMessage("LevelManager场景完全加载完成 - 所有游戏对象已就绪");
 
             // 在游戏对象完全初始化后创建GUI面板
@@ -2598,6 +2619,118 @@ namespace DashPlus
                 PauseMenu.Hide();
                 LogMessage("ESC拦截：关闭游戏暂停菜单");
             }
+        }
+
+        /// <summary>
+        /// 隐藏准心
+        /// </summary>
+        void HideAimMarker()
+        {
+            if (aimMarkerHidden)
+            {
+                LogMessage("准心已经隐藏，跳过重复操作");
+                return;
+            }
+
+            try
+            {
+                var aimMarker = FindCurrentAimMarker();
+                if (aimMarker != null)
+                {
+                    aimMarker.rootCanvasGroup.alpha = 0f;
+                    cachedAimMarker = aimMarker;
+                    aimMarkerHidden = true;
+                    LogMessage("准心已隐藏");
+                }
+                else
+                {
+                    LogMessage("无法找到准心组件");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"隐藏准心时发生异常: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 显示准心
+        /// </summary>
+        void ShowAimMarker()
+        {
+            if (!aimMarkerHidden)
+            {
+                LogMessage("准心已经显示，跳过重复操作");
+                return;
+            }
+
+            try
+            {
+                var aimMarker = FindCurrentAimMarker();
+                if (aimMarker != null || cachedAimMarker != null)
+                {
+                    // 优先使用缓存的准星，如果不存在则重新查找
+                    var target = aimMarker ?? cachedAimMarker;
+                    if (target != null)
+                    {
+                        target.rootCanvasGroup.alpha = 1f;
+                        aimMarkerHidden = false;
+                        LogMessage("准心已显示");
+                    }
+                }
+                else
+                {
+                    LogMessage("无法找到准心组件");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"显示准心时发生异常: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 查找当前场景中的 AimMarker 组件
+        /// </summary>
+        AimMarker? FindCurrentAimMarker()
+        {
+            // 检查 LevelManager 是否发生变化
+            if (LevelManager.Instance != lastKnownLevelManager)
+            {
+                lastKnownLevelManager = LevelManager.Instance;
+                cachedAimMarker = null; // 清除缓存，强制重新查找
+                LogMessage("LevelManager 已变更，清除准星缓存");
+            }
+
+            // 如果有缓存的准星且仍然有效，直接返回
+            if (cachedAimMarker != null && cachedAimMarker.gameObject != null)
+            {
+                return cachedAimMarker;
+            }
+
+            // 重新查找准星
+            if (LevelManager.Instance != null)
+            {
+                var aimMarkers = LevelManager.Instance.GetComponentsInChildren<AimMarker>(true);
+                if (aimMarkers.Length > 0)
+                {
+                    cachedAimMarker = aimMarkers[0];
+                    LogMessage($"找到准星组件: {cachedAimMarker.gameObject.name}");
+                    return cachedAimMarker;
+                }
+            }
+
+            // 备用方案：全局查找
+            var globalAimMarkers = FindObjectsOfType<AimMarker>();
+            if (globalAimMarkers.Length > 0)
+            {
+                cachedAimMarker = globalAimMarkers[0];
+                LogMessage($"通过全局查找找到准星组件: {cachedAimMarker.gameObject.name}");
+                return cachedAimMarker;
+            }
+
+            LogMessage("未找到任何准星组件");
+            return null;
         }
     }
 }
