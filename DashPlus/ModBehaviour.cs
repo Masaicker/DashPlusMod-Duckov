@@ -180,10 +180,9 @@ namespace DashPlus
             whiteTexture.SetPixel(0, 0, Color.white);
             whiteTexture.Apply();
 
+            LoadSettings();
             // 初始化滚轮输入拦截系统
             InitializeScrollWheelInterception();
-
-            LoadSettings();
         }
 
         /// <summary>
