@@ -166,7 +166,7 @@ namespace DashPlus
         protected override void OnAfterSetup()
         {
             base.OnAfterSetup();
-            //SceneManager.sceneLoaded += OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
 
             // 订阅LevelManager场景完全加载完成事件
@@ -244,7 +244,6 @@ namespace DashPlus
 
         void Update()
         {
-
             if (Input.GetKeyDown(KeyCode.Z) && Input.GetKey(KeyCode.LeftControl) && enableLogging)
             {
                 TestGetHashCode();
@@ -361,13 +360,13 @@ namespace DashPlus
             }
 
             // 闪避自动换弹系统
-            if (enableDashReload)
+            if (enableDashReload && hasOriginalValues)
             {
                 HandleDashReload();
             }
 
             // 射击打断换弹系统
-            if (enableShootInterruptReload)
+            if (enableShootInterruptReload && hasOriginalValues)
             {
                 HandleShootInterruptReload();
             }
@@ -506,14 +505,18 @@ namespace DashPlus
             }
         }
 
-        // void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-        // {
-        //     //切换场景后InputManager会变化，cachedInputManager就会失效
-        //     //cachedInputManager = null;
-        //     LogMessage($"场景切换: {scene.name}");
-        //
-        //     //if (scene.name == "MainMenu") hasOriginalValues = false;
-        // }
+        void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (LevelManager.Instance == null)
+            {
+                hasOriginalValues = false;
+                LogMessage($"当前场景为{scene.name}  {hasOriginalValues}");
+            }
+            else
+            {
+                LogMessage($"当前场景为{scene.name}  {hasOriginalValues}");
+            }
+        }
 
         /// <summary>
         /// LevelManager场景完全加载完成回调（在"Done!"之前触发）
@@ -2085,7 +2088,7 @@ namespace DashPlus
 
         protected override void OnBeforeDeactivate()
         {
-            //SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
 
             // 取消订阅关卡加载完成事件
