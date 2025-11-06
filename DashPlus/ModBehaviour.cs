@@ -166,7 +166,7 @@ namespace DashPlus
         protected override void OnAfterSetup()
         {
             base.OnAfterSetup();
-            SceneManager.sceneLoaded += OnSceneLoaded;
+            //SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
 
             // 订阅LevelManager场景完全加载完成事件
@@ -244,6 +244,9 @@ namespace DashPlus
 
         void Update()
         {
+            // 如果关卡没有初始化，跳过所有游戏逻辑
+            if (!LevelManager.LevelInited) return;
+            
             if (Input.GetKeyDown(KeyCode.Z) && Input.GetKey(KeyCode.LeftControl) && enableLogging)
             {
                 TestGetHashCode();
@@ -360,13 +363,13 @@ namespace DashPlus
             }
 
             // 闪避自动换弹系统
-            if (enableDashReload && hasOriginalValues)
+            if (enableDashReload)
             {
                 HandleDashReload();
             }
 
             // 射击打断换弹系统
-            if (enableShootInterruptReload && hasOriginalValues)
+            if (enableShootInterruptReload)
             {
                 HandleShootInterruptReload();
             }
@@ -505,18 +508,18 @@ namespace DashPlus
             }
         }
 
-        void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-        {
-            if (LevelManager.Instance == null)
-            {
-                hasOriginalValues = false;
-                LogMessage($"当前场景为{scene.name}  {hasOriginalValues}");
-            }
-            else
-            {
-                LogMessage($"当前场景为{scene.name}  {hasOriginalValues}");
-            }
-        }
+        // void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        // {
+        //     if (LevelManager.Instance == null)
+        //     {
+        //         hasOriginalValues = false;
+        //         LogMessage($"当前场景为{scene.name}  {hasOriginalValues}");
+        //     }
+        //     else
+        //     {
+        //         LogMessage($"当前场景为{scene.name}  {hasOriginalValues}");
+        //     }
+        // }
 
         /// <summary>
         /// LevelManager场景完全加载完成回调（在"Done!"之前触发）
@@ -2088,7 +2091,7 @@ namespace DashPlus
 
         protected override void OnBeforeDeactivate()
         {
-            SceneManager.sceneLoaded -= OnSceneLoaded;
+            //SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
 
             // 取消订阅关卡加载完成事件
