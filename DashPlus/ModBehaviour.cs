@@ -2,7 +2,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
+using System.IO;
 using UnityEngine.InputSystem;
+using Newtonsoft.Json;
 
 namespace DashPlus
 {
@@ -162,6 +164,9 @@ namespace DashPlus
         private bool aimMarkerHidden = true; // 准心是否已隐藏
         private AimMarker? cachedAimMarker; // 缓存的AimMarker组件
         private LevelManager? lastKnownLevelManager; // 上次已知的LevelManager
+
+        // JSON配置文件路径
+        private readonly string configFilePath = Path.Combine(Application.persistentDataPath, "DashPlus.json");
 
         protected override void OnAfterSetup()
         {
@@ -963,87 +968,155 @@ namespace DashPlus
 
         void LoadSettings()
         {
-            // 闪避参数
-            dashDistanceMultiplier = PlayerPrefs.GetFloat("DashPlus_DashDistance", 1.0f);
-            staminaCost = PlayerPrefs.GetFloat("DashPlus_Stamina", 10f);
-            coolTime = PlayerPrefs.GetFloat("DashPlus_CoolTime", 0.5f);
+            if (File.Exists(configFilePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(configFilePath);
+                    var settings = JsonConvert.DeserializeObject<DashPlusSettings>(json);
+                    if (settings != null)
+                    {
+                        ApplySettings(settings);
+                        LogMessage($"JSON配置设置已加载:\n" +
+                                   $"  闪避: 距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s\n" +
+                                   $"  奔跑: 步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x\n" +
+                                   $"  惯性: 禁用={disableMovementInertia}\n" +
+                                   $"  负重: 无限={enableInfiniteWeight}\n" +
+                                   $"  视野: 自定义={enableCustomFOV}, 倍数={fovMultiplier:F1}x\n" +
+                                   $"  回血: 启用={enableKillHeal}, 比例={healPercentage:F1}%, 最大={maxHealAmount:F1}\n" +
+                                   $"  换弹: 闪避换弹={enableDashReload}({dashReloadPercentage}%), 射击打断={enableShootInterruptReload}\n" +
+                                   $"  调试: 日志={enableLogging}");
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogMessage($"JSON配置加载失败: {ex.Message}");
+                }
+            }
 
-            // 闪避换弹设置
-            enableDashReload = PlayerPrefs.GetInt("DashPlus_DashReload", 0) == 1;
-            dashReloadPercentage = PlayerPrefs.GetInt("DashPlus_DashReloadPercentage", 0);
-            enableShootInterruptReload = PlayerPrefs.GetInt("DashPlus_ShootInterruptReload", 0) == 1;
-
-            // 击杀回血设置
-            enableKillHeal = PlayerPrefs.GetInt("DashPlus_KillHeal", 0) == 1;
-            healPercentage = PlayerPrefs.GetInt("DashPlus_HealPercentage", 5);
-            maxHealAmount = PlayerPrefs.GetFloat("DashPlus_MaxHealAmount", 50.0f);
-
-            // 奔跑参数
-            walkSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_WalkSpeed", 1.0f);
-            runSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_RunSpeed", 1.0f);
-            staminaDrainRateMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaDrain", 1.0f);
-            staminaRecoverRateMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaRecover", 1.0f);
-            staminaRecoverTimeMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaRecoverTime", 1.0f);
-
-            // 移动惯性参数
-            disableMovementInertia = PlayerPrefs.GetInt("DashPlus_DisableInertia", 0) == 1;
-
-            // 负重参数
-            enableInfiniteWeight = PlayerPrefs.GetInt("DashPlus_InfiniteWeight", 0) == 1;
-
-            // 视野参数
-            enableCustomFOV = PlayerPrefs.GetInt("DashPlus_CustomFOV", 0) == 1;
-            fovMultiplier = PlayerPrefs.GetFloat("DashPlus_FOV", 1.0f);
-
-            enableLogging = PlayerPrefs.GetInt("DashPlus_Logging", 0) == 1;
-            LogMessage($"设置已加载:\n" +
-                      $"  闪避: 距离={dashDistanceMultiplier}x, 体力={staminaCost}, 冷却={coolTime:F2}s\n" +
-                      $"  奔跑: 步行={walkSpeedMultiplier}x, 奔跑={runSpeedMultiplier}x, 消耗={staminaDrainRateMultiplier}x, 恢复={staminaRecoverRateMultiplier}x, 恢复延迟={staminaRecoverTimeMultiplier}x\n" +
-                      $"  惯性: 禁用={disableMovementInertia}\n" +
-                      $"  负重: 无限={enableInfiniteWeight}\n" +
-                      $"  视野: 自定义={enableCustomFOV}, 倍数={fovMultiplier:F1}x\n" +
-                      $"  回血: 启用={enableKillHeal}, 比例={healPercentage:F1}%, 最大={maxHealAmount:F1}\n" +
-                      $"  换弹: 闪避换弹={enableDashReload}({dashReloadPercentage}%), 射击打断={enableShootInterruptReload}\n" +
-                      $"  调试: 日志={enableLogging}");
+            MigrateFromPlayerPrefs();
+            SaveSettings();
         }
 
         void SaveSettings()
         {
-            // 闪避参数
-            PlayerPrefs.SetFloat("DashPlus_DashDistance", dashDistanceMultiplier);
-            PlayerPrefs.SetFloat("DashPlus_Stamina", staminaCost);
-            PlayerPrefs.SetFloat("DashPlus_CoolTime", coolTime);
+            try
+            {
+                var settings = GetCurrentSettings();
+                string json = JsonConvert.SerializeObject(settings, Formatting.Indented);
+                string? directory = Path.GetDirectoryName(configFilePath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+                File.WriteAllText(configFilePath, json);
+                LogMessage("JSON配置文件保存成功");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"JSON配置保存失败: {ex.Message}");
+            }
+        }
 
-            // 闪避换弹设置
-            PlayerPrefs.SetInt("DashPlus_DashReload", enableDashReload ? 1 : 0);
-            PlayerPrefs.SetInt("DashPlus_DashReloadPercentage", dashReloadPercentage);
-            PlayerPrefs.SetInt("DashPlus_ShootInterruptReload", enableShootInterruptReload ? 1 : 0);
+        void MigrateFromPlayerPrefs()
+        {
+            var settings = new DashPlusSettings
+            {
+                dashDistanceMultiplier = PlayerPrefs.GetFloat("DashPlus_DashDistance", 1.0f),
+                staminaCost = PlayerPrefs.GetFloat("DashPlus_Stamina", 10f),
+                coolTime = PlayerPrefs.GetFloat("DashPlus_CoolTime", 0.5f),
+                enableDashReload = PlayerPrefs.GetInt("DashPlus_DashReload", 0) == 1,
+                dashReloadPercentage = PlayerPrefs.GetInt("DashPlus_DashReloadPercentage", 0),
+                enableShootInterruptReload = PlayerPrefs.GetInt("DashPlus_ShootInterruptReload", 0) == 1,
+                enableKillHeal = PlayerPrefs.GetInt("DashPlus_KillHeal", 0) == 1,
+                healPercentage = PlayerPrefs.GetInt("DashPlus_HealPercentage", 5),
+                maxHealAmount = PlayerPrefs.GetFloat("DashPlus_MaxHealAmount", 50.0f),
+                walkSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_WalkSpeed", 1.0f),
+                runSpeedMultiplier = PlayerPrefs.GetFloat("DashPlus_RunSpeed", 1.0f),
+                staminaDrainRateMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaDrain", 1.0f),
+                staminaRecoverRateMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaRecover", 1.0f),
+                staminaRecoverTimeMultiplier = PlayerPrefs.GetFloat("DashPlus_StaminaRecoverTime", 1.0f),
+                disableMovementInertia = PlayerPrefs.GetInt("DashPlus_DisableInertia", 0) == 1,
+                enableInfiniteWeight = PlayerPrefs.GetInt("DashPlus_InfiniteWeight", 0) == 1,
+                enableCustomFOV = PlayerPrefs.GetInt("DashPlus_CustomFOV", 0) == 1,
+                fovMultiplier = PlayerPrefs.GetFloat("DashPlus_FOV", 1.0f),
+                enableLogging = PlayerPrefs.GetInt("DashPlus_Logging", 0) == 1
+            };
 
-            // 击杀回血设置
-            PlayerPrefs.SetInt("DashPlus_KillHeal", enableKillHeal ? 1 : 0);
-            PlayerPrefs.SetInt("DashPlus_HealPercentage", healPercentage);
-            PlayerPrefs.SetFloat("DashPlus_MaxHealAmount", maxHealAmount);
+            ApplySettings(settings);
 
-            // 奔跑参数
-            PlayerPrefs.SetFloat("DashPlus_WalkSpeed", walkSpeedMultiplier);
-            PlayerPrefs.SetFloat("DashPlus_RunSpeed", runSpeedMultiplier);
-            PlayerPrefs.SetFloat("DashPlus_StaminaDrain", staminaDrainRateMultiplier);
-            PlayerPrefs.SetFloat("DashPlus_StaminaRecover", staminaRecoverRateMultiplier);
-            PlayerPrefs.SetFloat("DashPlus_StaminaRecoverTime", staminaRecoverTimeMultiplier);
+            // 只删除DashPlus相关的PlayerPrefs键
+            PlayerPrefs.DeleteKey("DashPlus_DashDistance");
+            PlayerPrefs.DeleteKey("DashPlus_Stamina");
+            PlayerPrefs.DeleteKey("DashPlus_CoolTime");
+            PlayerPrefs.DeleteKey("DashPlus_DashReload");
+            PlayerPrefs.DeleteKey("DashPlus_DashReloadPercentage");
+            PlayerPrefs.DeleteKey("DashPlus_ShootInterruptReload");
+            PlayerPrefs.DeleteKey("DashPlus_KillHeal");
+            PlayerPrefs.DeleteKey("DashPlus_HealPercentage");
+            PlayerPrefs.DeleteKey("DashPlus_MaxHealAmount");
+            PlayerPrefs.DeleteKey("DashPlus_WalkSpeed");
+            PlayerPrefs.DeleteKey("DashPlus_RunSpeed");
+            PlayerPrefs.DeleteKey("DashPlus_StaminaDrain");
+            PlayerPrefs.DeleteKey("DashPlus_StaminaRecover");
+            PlayerPrefs.DeleteKey("DashPlus_StaminaRecoverTime");
+            PlayerPrefs.DeleteKey("DashPlus_DisableInertia");
+            PlayerPrefs.DeleteKey("DashPlus_InfiniteWeight");
+            PlayerPrefs.DeleteKey("DashPlus_CustomFOV");
+            PlayerPrefs.DeleteKey("DashPlus_FOV");
+            PlayerPrefs.DeleteKey("DashPlus_Logging");
 
-            // 移动惯性参数
-            PlayerPrefs.SetInt("DashPlus_DisableInertia", disableMovementInertia ? 1 : 0);
+            LogMessage("PlayerPrefs设置已迁移到JSON配置文件");
+        }
 
-            // 负重参数
-            PlayerPrefs.SetInt("DashPlus_InfiniteWeight", enableInfiniteWeight ? 1 : 0);
+        void ApplySettings(DashPlusSettings settings)
+        {
+            dashDistanceMultiplier = settings.dashDistanceMultiplier;
+            staminaCost = settings.staminaCost;
+            coolTime = settings.coolTime;
+            enableDashReload = settings.enableDashReload;
+            dashReloadPercentage = settings.dashReloadPercentage;
+            enableShootInterruptReload = settings.enableShootInterruptReload;
+            enableKillHeal = settings.enableKillHeal;
+            healPercentage = settings.healPercentage;
+            maxHealAmount = settings.maxHealAmount;
+            walkSpeedMultiplier = settings.walkSpeedMultiplier;
+            runSpeedMultiplier = settings.runSpeedMultiplier;
+            staminaDrainRateMultiplier = settings.staminaDrainRateMultiplier;
+            staminaRecoverRateMultiplier = settings.staminaRecoverRateMultiplier;
+            staminaRecoverTimeMultiplier = settings.staminaRecoverTimeMultiplier;
+            disableMovementInertia = settings.disableMovementInertia;
+            enableInfiniteWeight = settings.enableInfiniteWeight;
+            enableCustomFOV = settings.enableCustomFOV;
+            fovMultiplier = settings.fovMultiplier;
+            enableLogging = settings.enableLogging;
+        }
 
-            // 视野参数
-            PlayerPrefs.SetInt("DashPlus_CustomFOV", enableCustomFOV ? 1 : 0);
-            PlayerPrefs.SetFloat("DashPlus_FOV", fovMultiplier);
-
-            PlayerPrefs.SetInt("DashPlus_Logging", enableLogging ? 1 : 0);
-            PlayerPrefs.Save();
-            LogMessage("设置已保存");
+        DashPlusSettings GetCurrentSettings()
+        {
+            return new DashPlusSettings
+            {
+                dashDistanceMultiplier = dashDistanceMultiplier,
+                staminaCost = staminaCost,
+                coolTime = coolTime,
+                enableDashReload = enableDashReload,
+                dashReloadPercentage = dashReloadPercentage,
+                enableShootInterruptReload = enableShootInterruptReload,
+                enableKillHeal = enableKillHeal,
+                healPercentage = healPercentage,
+                maxHealAmount = maxHealAmount,
+                walkSpeedMultiplier = walkSpeedMultiplier,
+                runSpeedMultiplier = runSpeedMultiplier,
+                staminaDrainRateMultiplier = staminaDrainRateMultiplier,
+                staminaRecoverRateMultiplier = staminaRecoverRateMultiplier,
+                staminaRecoverTimeMultiplier = staminaRecoverTimeMultiplier,
+                disableMovementInertia = disableMovementInertia,
+                enableInfiniteWeight = enableInfiniteWeight,
+                enableCustomFOV = enableCustomFOV,
+                fovMultiplier = fovMultiplier,
+                enableLogging = enableLogging
+            };
         }
 
         void OnApplicationQuit()

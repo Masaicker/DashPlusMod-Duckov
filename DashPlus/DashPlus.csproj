@@ -24,6 +24,7 @@
         <Reference Include="$(DuckovPath)$(SubPath)ItemStatsSystem.dll"/>
         <Reference Include="$(DuckovPath)$(SubPath)AstarPathfindingProject.dll"/>
         <Reference Include="$(DuckovPath)$(SubPath)SodaLocalization.dll"/>
+        <Reference Include="$(DuckovPath)$(SubPath)Newtonsoft.Json.dll"/>
     </ItemGroup>
 
 </Project>
