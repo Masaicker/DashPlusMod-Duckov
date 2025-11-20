@@ -1485,7 +1485,7 @@ namespace DashPlus
             // 检查是否点击了值显示
             if (isValueClicked && parameterIndex >= 0 && GUI.enabled)
             {
-                ShowInputDialog(parameterName, label, value, minValue, maxValue, parameterIndex);
+                ShowInputDialog(parameterName, label, value, minValue, maxValue, parameterIndex, format);
             }
 
             // 如果需要重置到默认值，返回默认值而不是newValue
@@ -1495,7 +1495,7 @@ namespace DashPlus
         /// <summary>
         /// 显示输入对话框
         /// </summary>
-        void ShowInputDialog(string title, string label, float currentValue, float minValue, float maxValue, int parameterIndex)
+        void ShowInputDialog(string title, string label, float currentValue, float minValue, float maxValue, int parameterIndex, string format = "F1")
         {
             showInputDialog = true;
             // 去掉冒号，用提示内容作为标题
@@ -1504,15 +1504,24 @@ namespace DashPlus
             // 根据参数类型决定范围显示格式
             string rangeFormat;
             string valueFormat;
-            if (parameterIndex == 3 || parameterIndex == 10) // 换弹加速百分比或回血比例
+            switch (format)
             {
-                rangeFormat = $"范围 / Range: {(int)minValue} - {(int)maxValue}";
-                valueFormat = currentValue.ToString("F0");
-            }
-            else
-            {
-                rangeFormat = $"范围 / Range: {minValue:F1} - {maxValue:F1}";
-                valueFormat = currentValue.ToString("F1");
+                case "F0":
+                    rangeFormat = $"范围 / Range: {(int)minValue} - {(int)maxValue}";
+                    valueFormat = currentValue.ToString("F0");
+                    break;
+                case "F1":
+                    rangeFormat = $"范围 / Range: {minValue:F1} - {maxValue:F1}";
+                    valueFormat = currentValue.ToString("F1");
+                    break;
+                case "F2":
+                    rangeFormat = $"范围 / Range: {minValue:F2} - {maxValue:F2}";
+                    valueFormat = currentValue.ToString("F2");
+                    break;
+                default:
+                    rangeFormat = $"范围 / Range: {minValue:F1} - {maxValue:F1}";
+                    valueFormat = currentValue.ToString("F1");
+                    break;
             }
 
             inputDialogPrompt = rangeFormat;
@@ -1914,7 +1923,7 @@ namespace DashPlus
             // 步行速度倍数
             float newWalkMultiplier = DrawSliderWithEditButton(
                 "步行速度倍数 / Walk Speed",
-                walkSpeedMultiplier, 1f, 5.0f, "F1", 4, "步行速度倍数"
+                walkSpeedMultiplier, 0.01f, 5.0f, "F2", 4, "步行速度倍数"
             );
 
             if (newWalkMultiplier != walkSpeedMultiplier)
@@ -1926,7 +1935,7 @@ namespace DashPlus
             // 奔跑速度倍数
             float newRunMultiplier = DrawSliderWithEditButton(
                 "奔跑速度倍数 / Run Speed",
-                runSpeedMultiplier, 1f, 5.0f, "F1", 5, "奔跑速度倍数"
+                runSpeedMultiplier, 0.01f, 5.0f, "F2", 5, "奔跑速度倍数"
             );
 
             if (newRunMultiplier != runSpeedMultiplier)
@@ -1950,7 +1959,7 @@ namespace DashPlus
             // 体力恢复率倍数
             float newRecoverMultiplier = DrawSliderWithEditButton(
                 "体力恢复率倍数 / Stamina Recover",
-                staminaRecoverRateMultiplier, 1f, 5.0f, "F1", 7, "体力恢复率倍数"
+                staminaRecoverRateMultiplier, 0.01f, 5.0f, "F2", 7, "体力恢复率倍数"
             );
 
             if (newRecoverMultiplier != staminaRecoverRateMultiplier)
